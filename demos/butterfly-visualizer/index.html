@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lepidoptera — Procedural Butterfly Visualizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Narrow:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+:root{ --bg:#e4eaed; --surface:#f7f8f8; --ink:#14242a; --muted:#697980; --hairline:#c5d3d9; --accent:#3c56bd; --accent-2:#3bb9a1; --warn:#f2ad0d; --error:#e62019; }
+
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; }
+body{
+  font-family:'Manrope',system-ui,sans-serif;
+  color:var(--ink);
+  background:var(--bg);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column;
+}
+
+/* animated gradient-mesh background */
+.mesh{ position:fixed; inset:0; z-index:0; overflow:hidden; }
+.blob{ position:absolute; border-radius:50%; filter:blur(70px); opacity:.5; }
+.blob.b1{ width:46vw; height:46vw; background:var(--accent);   top:-12vw; left:-8vw;  animation:drift1 22s ease-in-out infinite; }
+.blob.b2{ width:40vw; height:40vw; background:var(--accent-2); bottom:-14vw; right:-6vw; animation:drift2 27s ease-in-out infinite; }
+.blob.b3{ width:32vw; height:32vw; background:var(--warn);     top:30%; left:40%;    animation:drift3 31s ease-in-out infinite; opacity:.32; }
+@keyframes drift1{ 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(8vw,6vw) scale(1.12);} }
+@keyframes drift2{ 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(-7vw,-5vw) scale(1.1);} }
+@keyframes drift3{ 0%,100%{transform:translate(0,0) scale(1);} 50%{transform:translate(-6vw,4vw) scale(.9);} }
+
+/* TOP COMMAND BAR */
+.topbar{
+  position:relative; z-index:3;
+  display:flex; align-items:center; gap:18px;
+  padding:0 16px; height:56px;
+  background:var(--surface);
+  border-bottom:3px solid var(--ink);
+}
+.wordmark{ display:flex; align-items:center; gap:10px; padding-right:16px; border-right:2px solid var(--hairline); height:100%; }
+.wordmark svg{ display:block; }
+.wordmark .name{ font-family:'Archivo Narrow',sans-serif; font-weight:700; font-size:22px; letter-spacing:.5px; text-transform:uppercase; line-height:1; }
+.wordmark .sub{ font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:2px; }
+
+.controls{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.btn{
+  font-family:'Archivo Narrow',sans-serif; font-weight:600; font-size:13px; letter-spacing:.6px; text-transform:uppercase;
+  display:inline-flex; align-items:center; gap:7px;
+  padding:8px 14px; height:36px;
+  background:var(--surface); color:var(--ink);
+  border:2px solid var(--ink); border-radius:0;
+  cursor:pointer; transition:all .15s ease;
+}
+.btn:hover{ background:var(--ink); color:var(--surface); }
+.btn:hover svg{ stroke:var(--surface); }
+.btn.primary{ background:var(--accent); color:var(--surface); border-color:var(--accent); }
+.btn.primary:hover{ background:var(--ink); border-color:var(--ink); }
+.btn.primary:hover svg{ stroke:var(--surface); }
+.btn svg{ stroke:var(--ink); transition:stroke .15s ease; }
+.btn.primary svg{ stroke:var(--surface); }
+
+.toggle{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+.toggle input{ appearance:none; width:38px; height:20px; background:var(--hairline); border:2px solid var(--ink); position:relative; cursor:pointer; transition:background .15s ease; }
+.toggle input::after{ content:""; position:absolute; top:1px; left:1px; width:12px; height:12px; background:var(--surface); transition:transform .15s ease; }
+.toggle input:checked{ background:var(--accent-2); }
+.toggle input:checked::after{ transform:translateX(18px); }
+
+.spacer{ flex:1; }
+.readout{ font-family:'Archivo Narrow',sans-serif; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:1.4px; display:flex; gap:16px; }
+.readout b{ color:var(--ink); font-weight:700; }
+
+/* content */
+.stage{ position:relative; z-index:2; flex:1; }
+.sectionlabel{ position:absolute; top:12px; left:16px; z-index:2; font-family:'Archivo Narrow',sans-serif; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); pointer-events:none; }
+canvas{ display:block; width:100%; height:100%; }
+
+/* info card for selected butterfly */
+.card{
+  position:absolute; z-index:4; right:16px; bottom:16px; width:246px;
+  background:var(--surface); border:3px solid var(--ink); border-radius:0;
+  padding:14px; display:none;
+}
+.card.show{ display:block; }
+.card h3{ font-family:'Archivo Narrow',sans-serif; font-size:19px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px; }
+.card .latin{ font-style:italic; color:var(--muted); font-size:12px; margin-bottom:10px; }
+.card .row{ display:flex; justify-content:space-between; font-size:12px; padding:5px 0; border-top:1px solid var(--hairline); text-transform:uppercase; letter-spacing:.5px; }
+.card .row span:first-child{ color:var(--muted); }
+.card .row span:last-child{ font-weight:700; }
+.swatches{ display:flex; gap:5px; margin-top:10px; }
+.swatches i{ width:22px; height:22px; border:2px solid var(--ink); display:block; }
+.hint{ position:absolute; z-index:2; bottom:14px; left:16px; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1.4px; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="mesh"><div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div></div>
+
+<header class="topbar">
+  <div class="wordmark">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 3v18"/>
+      <path d="M12 8C9 2 3 3 3 8c0 4 5 5 9 4"/>
+      <path d="M12 8c3-6 9-5 9 0 0 4-5 5-9 4"/>
+      <path d="M12 13c-3 8-8 6-8 2 0-3 4-4 8-1"/>
+      <path d="M12 13c3 8 8 6 8 2 0-3-4-4-8-1"/>
+    </svg>
+    <div>
+      <div class="name">Lepidoptera</div>
+      <div class="sub">Procedural Field</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="regen">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>
+      Generate 50
+    </button>
+    <button class="btn" id="pause">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>
+      Pause
+    </button>
+    <label class="toggle"><input type="checkbox" id="trails"> Trails</label>
+    <label class="toggle"><input type="checkbox" id="grid"> Grid</label>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="readout">
+    <span>Species <b id="count">50</b></span>
+    <span>FPS <b id="fps">—</b></span>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="sectionlabel">Live Habitat // 50 unique species</div>
+  <canvas id="c"></canvas>
+  <div class="hint">Click a butterfly to inspect its taxonomy</div>
+  <div class="card" id="card">
+    <h3 id="cn">—</h3>
+    <div class="latin" id="cl">—</div>
+    <div class="row"><span>Wingspan</span><span id="cw">—</span></div>
+    <div class="row"><span>Wing form</span><span id="cf">—</span></div>
+    <div class="row"><span>Pattern</span><span id="cp">—</span></div>
+    <div class="row"><span>Flap rate</span><span id="cr">—</span></div>
+    <div class="swatches" id="cs"></div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+function resize(){
+  W = canvas.clientWidth; H = canvas.clientHeight;
+  canvas.width = W * DPR; canvas.height = H * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+window.addEventListener('resize', resize);
+
+/* ---------- deterministic RNG per butterfly ---------- */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* ---------- naming ---------- */
+const GENUS = ['Morpho','Papilio','Vanessa','Danaus','Heliconius','Aglais','Colias','Pieris','Junonia','Nymphalis','Argynnis','Lycaena','Charaxes','Attacus','Cethosia','Graphium','Delias','Parnassius','Speyeria','Battus'];
+const SPECIES = ['aurelia','nyx','vesper','lumen','celeste','umbra','ignis','solaris','borealis','cyanea','ferrata','aurora','noctis','viridis','magnia','helios','crocea','stellae','pyrrha','glauca','tessera','fulgora','onyx','zephyra'];
+const FORMS = ['Rounded','Angular','Swallowtail','Falcate','Broad','Tapered'];
+const PATTERNS = ['Eyespots','Bands','Marbled','Speckled','Veined','Gradient','Tessellate'];
+
+/* palette pools drawn ONLY from the CSS variable spec */
+const cssv = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+let BASE = [];
+function loadPalette(){
+  BASE = ['--accent','--accent-2','--warn','--error','--ink','--muted','--surface','--hairline','--bg'].map(cssv);
+}
+
+function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+
+/* blend two hex colors */
+function hex2rgb(h){ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return [n>>16&255,n>>8&255,n&255]; }
+function mix(a,b,t){ const A=hex2rgb(a),B=hex2rgb(b); return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`; }
+
+/* ---------- butterfly factory ---------- */
+class Butterfly{
+  constructor(seed){
+    this.seed = seed;
+    const rng = mulberry32(seed);
+    this.rng = rng;
+    // identity
+    this.genus = pick(rng, GENUS);
+    this.species = pick(rng, SPECIES);
+    this.formIdx = Math.floor(rng()*FORMS.length);
+    this.form = FORMS[this.formIdx];
+    this.patternIdx = Math.floor(rng()*PATTERNS.length);
+    this.pattern = PATTERNS[this.patternIdx];
+    // colors (analogous-ish: pick a primary from vivid pool, secondary nearby, accents)
+    const vivid = [BASE[0],BASE[1],BASE[2],BASE[3]]; // accent, accent-2, warn, error
+    this.cPrimary = vivid[Math.floor(rng()*vivid.length)];
+    this.cSecondary = vivid[Math.floor(rng()*vivid.length)];
+    this.cEdge = BASE[4]; // ink
+    this.cSpot = rng() > .5 ? BASE[6] : BASE[2]; // surface or warn
+    this.cVein = BASE[4];
+    // geometry
+    this.scale = 0.55 + rng()*1.15;
+    this.wingLen = 30 + rng()*26;
+    this.wingWide = 0.7 + rng()*0.7;
+    this.hindLen = 22 + rng()*20;
+    this.tail = this.form === 'Swallowtail' ? 8 + rng()*14 : 0;
+    this.spots = Math.floor(rng()*4);
+    this.bands = 1 + Math.floor(rng()*4);
+    this.wingspanMm = Math.round((this.wingLen*2)*1.6 + 10);
+    // motion
+    this.x = rng()*1; this.y = rng()*1; // normalized, set on layout
+    this.px = 0; this.py = 0;
+    this.angle = rng()*Math.PI*2;
+    this.speed = 18 + rng()*44;
+    this.turn = (rng()-.5)*0.9;
+    this.flapRate = 5 + rng()*8;
+    this.flapPhase = rng()*Math.PI*2;
+    this.wobble = rng()*Math.PI*2;
+    this.trail = [];
+  }
+  place(){ this.px = 40 + this.rng()*(W-80); this.py = 40 + this.rng()*(H-80); }
+
+  step(dt, t){
+    // wandering steering
+    this.angle += this.turn*dt + Math.sin(t*0.7 + this.wobble)*0.6*dt;
+    this.px += Math.cos(this.angle)*this.speed*dt;
+    this.py += Math.sin(this.angle)*this.speed*dt + Math.sin(t*1.3+this.wobble)*8*dt;
+    // soft wrap with margin
+    const m = 60;
+    if(this.px < -m) this.px = W+m; if(this.px > W+m) this.px = -m;
+    if(this.py < -m) this.py = H+m; if(this.py > H+m) this.py = -m;
+    if(trailsOn){
+      this.trail.push([this.px,this.py]);
+      if(this.trail.length > 26) this.trail.shift();
+    } else if(this.trail.length){ this.trail.length = 0; }
+  }
+
+  drawWing(g, side, flap){
+    // side = 1 or -1 (mirror). flap 0..1 -> horizontal squash for 3D flap illusion
+    const s = this.scale;
+    const fold = 0.35 + 0.65*flap; // how open the wing is
+    g.save();
+    g.scale(side*fold, 1);
+    const L = this.wingLen*s, Wd = this.wingLen*this.wingWide*s, HL = this.hindLen*s;
+
+    // forewing gradient body
+    const grad = g.createLinearGradient(0,-L*0.4, L, L*0.2);
+    grad.addColorStop(0, this.cPrimary);
+    grad.addColorStop(1, mix(this.cPrimary, this.cSecondary, 0.85));
+    g.fillStyle = grad;
+    g.strokeStyle = this.cEdge; g.lineWidth = 1.6/ (fold||1);
+    g.beginPath();
+    if(this.form==='Angular'){
+      g.moveTo(0,-4); g.lineTo(L*0.9,-L*0.9); g.lineTo(L*1.05,-L*0.2); g.lineTo(L*0.7,L*0.15); g.lineTo(0,4);
+    } else if(this.form==='Falcate'){
+      g.moveTo(0,-4); g.bezierCurveTo(L*0.6,-L*0.9, L*1.15,-L*0.7, L*1.1,-L*0.1);
+      g.bezierCurveTo(L*0.9,L*0.1, L*0.4,L*0.2, 0,4);
+    } else if(this.form==='Broad'){
+      g.moveTo(0,-4); g.bezierCurveTo(L*0.5,-L, L*1.2,-L*0.5, L*1.1,L*0.05);
+      g.bezierCurveTo(L*0.9,L*0.35, L*0.3,L*0.3, 0,4);
+    } else if(this.form==='Tapered'){
+      g.moveTo(0,-4); g.bezierCurveTo(L*0.7,-L*0.8, L*1.25,-L*0.5, L*1.2,-L*0.15);
+      g.bezierCurveTo(L*0.9,0, L*0.4,L*0.05, 0,4);
+    } else { // Rounded / Swallowtail forewing
+      g.moveTo(0,-4); g.bezierCurveTo(L*0.4,-L*0.95, L*1.05,-L*0.6, L*1.0,-L*0.05);
+      g.bezierCurveTo(L*0.95,L*0.25, L*0.35,L*0.25, 0,4);
+    }
+    g.closePath(); g.fill(); g.stroke();
+
+    // hindwing
+    const grad2 = g.createLinearGradient(0,0, HL, HL);
+    grad2.addColorStop(0, mix(this.cSecondary, this.cPrimary, 0.3));
+    grad2.addColorStop(1, this.cSecondary);
+    g.fillStyle = grad2;
+    g.beginPath();
+    g.moveTo(0,2);
+    g.bezierCurveTo(HL*0.5, HL*0.2, HL*1.0, HL*0.5, HL*0.85, HL*1.05);
+    if(this.tail>0){
+      g.lineTo(HL*0.55+this.tail*s*0.3, HL*1.2 + this.tail*s);
+      g.lineTo(HL*0.45, HL*1.1);
+    }
+    g.bezierCurveTo(HL*0.2, HL*1.0, 0, HL*0.6, 0, 6);
+    g.closePath(); g.fill(); g.stroke();
+
+    // ---- patterns ----
+    g.save();
+    g.beginPath(); // clip to forewing bounds roughly
+    // pattern: bands
+    if(this.pattern==='Bands' || this.pattern==='Tessellate'){
+      g.strokeStyle = mix(this.cSecondary, this.cEdge, 0.5); g.lineWidth = 2.2;
+      for(let b=1;b<=this.bands;b++){
+        const r = L*(0.3 + b*0.16);
+        g.beginPath(); g.arc(0,0,r,-Math.PI*0.55,-Math.PI*0.02); g.stroke();
+      }
+    }
+    if(this.pattern==='Veined' || this.form==='Swallowtail'){
+      g.strokeStyle = this.cVein; g.lineWidth = 1; g.globalAlpha=.55;
+      for(let v=0;v<5;v++){ g.beginPath(); g.moveTo(0,0); const a=-Math.PI*0.55 + v*Math.PI*0.11; g.lineTo(Math.cos(a)*L*1.05, Math.sin(a)*L*1.05); g.stroke(); }
+      g.globalAlpha=1;
+    }
+    if(this.pattern==='Speckled' || this.pattern==='Marbled'){
+      g.fillStyle = this.cSpot; const rng=mulberry32(this.seed^0x9e37);
+      const n = this.pattern==='Marbled'?7:14;
+      for(let i=0;i<n;i++){ const a=-Math.PI*0.5+rng()*Math.PI*0.5, rr=L*(0.2+rng()*0.75); g.globalAlpha=.5+rng()*0.4; g.beginPath(); g.arc(Math.cos(a)*rr, Math.sin(a)*rr, 1.4+rng()*2.6,0,7); g.fill(); }
+      g.globalAlpha=1;
+    }
+    if(this.pattern==='Eyespots' || this.spots>0){
+      const rng=mulberry32(this.seed^0x51ed);
+      const n = Math.max(this.spots,1);
+      for(let i=0;i<n;i++){
+        const a=-Math.PI*0.45 + i*(Math.PI*0.5/Math.max(n-1,1))*0.9;
+        const rr=L*0.72, ex=Math.cos(a)*rr, ey=Math.sin(a)*rr+HL*0.1;
+        g.fillStyle=this.cEdge; g.beginPath(); g.arc(ex,ey,3.6,0,7); g.fill();
+        g.fillStyle=this.cSpot; g.beginPath(); g.arc(ex,ey,1.7,0,7); g.fill();
+      }
+    }
+    if(this.pattern==='Gradient'){
+      g.fillStyle = mix(this.cPrimary, this.cSpot, 0.6); g.globalAlpha=.35;
+      g.beginPath(); g.arc(L*0.85,-L*0.4, L*0.5,0,7); g.fill(); g.globalAlpha=1;
+    }
+    g.restore();
+
+    // highlight along leading edge (spec: highlight along one edge)
+    g.strokeStyle = 'rgba(255,255,255,0.55)'; g.lineWidth = 1.4;
+    g.beginPath(); g.moveTo(L*0.1,-L*0.55); g.quadraticCurveTo(L*0.7,-L*0.75, L*0.98,-L*0.15); g.stroke();
+
+    g.restore();
+  }
+
+  draw(g, t){
+    const flap = 0.5 + 0.5*Math.sin(t*this.flapRate + this.flapPhase);
+    // trail
+    if(this.trail.length>1){
+      g.strokeStyle = this.cPrimary; g.lineWidth = 1; g.globalAlpha=.18;
+      g.beginPath(); g.moveTo(this.trail[0][0],this.trail[0][1]);
+      for(const p of this.trail) g.lineTo(p[0],p[1]);
+      g.stroke(); g.globalAlpha=1;
+    }
+    g.save();
+    g.translate(this.px, this.py);
+    g.rotate(this.angle + Math.PI/2 + Math.sin(t*2+this.wobble)*0.15);
+    // body
+    const bl = 14*this.scale;
+    const bg = g.createLinearGradient(-2,-bl,2,bl);
+    bg.addColorStop(0, this.cEdge); bg.addColorStop(1, mix(this.cEdge,this.cPrimary,0.4));
+    g.fillStyle = bg;
+    g.beginPath(); g.ellipse(0,0,2.4*this.scale,bl,0,0,7); g.fill();
+    // head + antennae
+    g.beginPath(); g.arc(0,-bl,3*this.scale,0,7); g.fill();
+    g.strokeStyle=this.cEdge; g.lineWidth=1;
+    g.beginPath(); g.moveTo(0,-bl); g.quadraticCurveTo(-6*this.scale,-bl-9*this.scale,-9*this.scale,-bl-8*this.scale); g.stroke();
+    g.beginPath(); g.moveTo(0,-bl); g.quadraticCurveTo(6*this.scale,-bl-9*this.scale,9*this.scale,-bl-8*this.scale); g.stroke();
+    // wings (draw far side first for flap depth)
+    this.drawWing(g, -1, flap);
+    this.drawWing(g,  1, flap);
+    g.restore();
+  }
+
+  hit(mx,my){
+    const dx=mx-this.px, dy=my-this.py;
+    return Math.hypot(dx,dy) < this.wingLen*this.scale*1.1;
+  }
+}
+
+/* ---------- state ---------- */
+let flock = [];
+let paused = false;
+let trailsOn = false;
+let gridOn = false;
+let selected = null;
+
+function generate(){
+  loadPalette();
+  flock = [];
+  const rootSeed = (Math.random()*1e9)|0;
+  for(let i=0;i<50;i++){
+    const b = new Butterfly((rootSeed + i*2654435761) >>> 0);
+    b.place();
+    flock.push(b);
+  }
+  selected = null;
+  document.getElementById('card').classList.remove('show');
+  document.getElementById('count').textContent = flock.length;
+}
+
+/* ---------- render loop ---------- */
+let last = performance.now();
+let fpsAcc = 0, fpsN = 0, fpsT = 0;
+
+function drawGrid(){
+  ctx.strokeStyle = cssv('--hairline'); ctx.globalAlpha=.5; ctx.lineWidth=1;
+  const step=48;
+  for(let x=0;x<W;x+=step){ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for(let y=0;y<H;y+=step){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+  ctx.globalAlpha=1;
+}
+
+function frame(now){
+  const dt = Math.min((now-last)/1000, 0.05); last = now;
+  const t = now/1000;
+
+  // fps
+  fpsAcc += 1/Math.max(dt,0.0001); fpsN++; fpsT += dt;
+  if(fpsT >= 0.5){ document.getElementById('fps').textContent = Math.round(fpsAcc/fpsN); fpsAcc=0; fpsN=0; fpsT=0; }
+
+  if(trailsOn){
+    ctx.fillStyle = 'rgba(228,234,237,0.16)';
+    ctx.fillRect(0,0,W,H);
+  } else {
+    ctx.clearRect(0,0,W,H);
+  }
+  if(gridOn) drawGrid();
+
+  if(!paused){
+    for(const b of flock) b.step(dt,t);
+  }
+  // depth: sort by y so lower ones draw on top
+  const order = [...flock].sort((a,b)=>a.py-b.py);
+  for(const b of order){
+    if(b===selected){
+      ctx.save();
+      ctx.strokeStyle = cssv('--accent'); ctx.lineWidth=2;
+      ctx.strokeRect(b.px-b.wingLen*b.scale*1.2, b.py-b.wingLen*b.scale*1.2, b.wingLen*b.scale*2.4, b.wingLen*b.scale*2.4);
+      ctx.restore();
+    }
+    b.draw(ctx, t);
+  }
+
+  requestAnimationFrame(frame);
+}
+
+/* ---------- interaction ---------- */
+canvas.addEventListener('click', e=>{
+  const r = canvas.getBoundingClientRect();
+  const mx = e.clientX-r.left, my = e.clientY-r.top;
+  // topmost (closest) first
+  let found=null, bd=1e9;
+  for(const b of flock){ if(b.hit(mx,my)){ const d=Math.hypot(mx-b.px,my-b.py); if(d<bd){bd=d;found=b;} } }
+  selected = found;
+  const card = document.getElementById('card');
+  if(found){
+    document.getElementById('cn').textContent = found.genus;
+    document.getElementById('cl').textContent = found.genus.toLowerCase()+' '+found.species;
+    document.getElementById('cw').textContent = found.wingspanMm+' mm';
+    document.getElementById('cf').textContent = found.form;
+    document.getElementById('cp').textContent = found.pattern;
+    document.getElementById('cr').textContent = found.flapRate.toFixed(1)+' Hz';
+    const sw = document.getElementById('cs'); sw.innerHTML='';
+    [found.cPrimary,found.cSecondary,found.cSpot,found.cEdge].forEach(c=>{ const i=document.createElement('i'); i.style.background=c; sw.appendChild(i); });
+    card.classList.add('show');
+  } else {
+    card.classList.remove('show');
+  }
+});
+
+document.getElementById('regen').addEventListener('click', generate);
+const pauseBtn = document.getElementById('pause');
+pauseBtn.addEventListener('click', ()=>{
+  paused=!paused;
+  pauseBtn.childNodes[2].textContent = paused? ' Resume':' Pause';
+});
+document.getElementById('trails').addEventListener('change', e=>{ trailsOn=e.target.checked; });
+document.getElementById('grid').addEventListener('change', e=>{ gridOn=e.target.checked; });
+
+/* ---------- boot ---------- */
+resize();
+generate();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

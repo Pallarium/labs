@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>SOLAR RUN</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Work+Sans:wght@400;600&display=swap">
+<style>
+:root{ --bg:#f0e7ef; --surface:#fbfafb; --ink:#241123; --muted:#836b81; --hairline:#dcc8da; --accent:#dd0c67; --accent-2:#880ce9; --warn:#f2ad0d; --error:#e62019; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:var(--ink);font-family:'Work Sans',sans-serif}
+#bar{position:fixed;top:0;left:0;right:0;height:52px;background:var(--surface);border-bottom:1px solid var(--hairline);display:flex;align-items:center;gap:18px;padding:0 18px;z-index:10;box-shadow:0 6px 0 var(--ink)}
+#bar h1{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;color:var(--ink)}
+#bar h1 span{color:var(--accent)}
+#bar .chip{font-size:12px;color:var(--muted);border:1px solid var(--hairline);border-radius:14px;padding:4px 10px;background:var(--bg);transition:all 150ms ease}
+#bar button{font-family:'Work Sans',sans-serif;font-weight:600;font-size:13px;border:1px solid var(--ink);border-radius:14px;padding:6px 14px;background:var(--surface);color:var(--ink);cursor:pointer;box-shadow:3px 3px 0 var(--ink);transition:all 150ms ease;margin-left:auto}
+#bar button:hover{background:var(--accent);color:var(--surface);transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+#bar button.paused{background:var(--warn);color:var(--ink)}
+canvas{display:block}
+</style>
+</head>
+<body>
+<div id="bar">
+  <h1>SOLAR <span>RUN</span></h1>
+  <div class="chip">→ drag to orbit</div>
+  <div class="chip">• scroll to zoom</div>
+  <button id="pauseBtn">✕ Pause</button>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+
+const scene = new THREE.Scene()
+scene.background = new THREE.Color(0x050208)
+const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000)
+camera.position.set(0, 22, 42)
+const renderer = new THREE.WebGLRenderer({antialias:true})
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2))
+renderer.setSize(innerWidth, innerHeight)
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.outputColorSpace = THREE.SRGBColorSpace
+document.body.appendChild(renderer.domElement)
+
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enableDamping = true
+controls.minDistance = 8
+controls.maxDistance = 200
+
+/** neon-lit sun */
+const sun = new THREE.Mesh(
+  new THREE.SphereGeometry(4, 48, 48),
+  new THREE.MeshBasicMaterial({color:0xffb638})
+)
+sun.name = 'sun'
+scene.add(sun)
+const sunLight = new THREE.PointLight(0xffd9a0, 900, 0, 2)
+sunLight.name = 'sunLight'
+scene.add(sunLight)
+scene.add(new THREE.AmbientLight(0x221133, 2))
+
+/** planets: neon palette, each on its own orbit pivot */
+const planetDefs = [
+  { name:'ember',  r:0.8,  dist:9,   speed:1.15, color:0xe62019, emis:0x330404 },
+  { name:'venora', r:1.3,  dist:14,  speed:0.72, color:0xdd0c67, emis:0x2b0214 },
+  { name:'cyanis', r:1.5,  dist:20,  speed:0.45, color:0x18c8e8, emis:0x032830 },
+  { name:'violux', r:2.1,  dist:28,  speed:0.26, color:0x880ce9, emis:0x1b0330 }
+]
+const planets = []
+for (const d of planetDefs) {
+  const pivot = new THREE.Group()
+  pivot.name = d.name + '_orbit'
+  pivot.rotation.y = Math.random()*Math.PI*2
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(d.r, 32, 32),
+    new THREE.MeshStandardMaterial({color:d.color, roughness:0.55, metalness:0.25, emissive:d.emis})
+  )
+  mesh.name = d.name
+  mesh.position.x = d.dist
+  pivot.add(mesh)
+  scene.add(pivot)
+  planets.push({pivot, mesh, speed:d.speed})
+
+  const ringPts = []
+  for (let i = 0; i <= 128; i++) {
+    const a = i/128 * Math.PI*2
+    ringPts.push(new THREE.Vector3(Math.cos(a)*d.dist, 0, Math.sin(a)*d.dist))
+  }
+  const ring = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(ringPts),
+    new THREE.LineBasicMaterial({color:0x3a2050, transparent:true, opacity:0.7})
+  )
+  ring.name = d.name + '_ring'
+  scene.add(ring)
+}
+
+/** starfield */
+const starGeo = new THREE.BufferGeometry()
+const starPos = new Float32Array(4000*3)
+for (let i = 0; i < 4000; i++) {
+  const v = new THREE.Vector3().randomDirection().multiplyScalar(300 + Math.random()*600)
+  starPos.set([v.x, v.y, v.z], i*3)
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3))
+const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({color:0xcfd8ff, size:1.4, sizeAttenuation:true}))
+stars.name = 'starfield'
+scene.add(stars)
+
+/** bloom for the neon look */
+const composer = new EffectComposer(renderer)
+composer.addPass(new RenderPass(scene, camera))
+composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.6, 0.1))
+
+let paused = false
+document.getElementById('pauseBtn').addEventListener('click', e => {
+  paused = !paused
+  e.target.textContent = paused ? '→ Resume' : '✕ Pause'
+  e.target.classList.toggle('paused', paused)
+})
+
+window.scene = scene
+window.camera = camera
+window.renderer = renderer
+
+const clock = new THREE.Clock()
+function loop() {
+  requestAnimationFrame(loop)
+  const dt = Math.min(clock.getDelta(), 1/20)
+  if (!paused) {
+    for (const p of planets) {
+      p.pivot.rotation.y += p.speed * dt
+      p.mesh.rotation.y += dt * 1.5
+    }
+    sun.rotation.y += dt * 0.1
+    stars.rotation.y += dt * 0.004
+  }
+  controls.update()
+  composer.render()
+}
+loop()
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth/innerHeight
+  camera.updateProjectionMatrix()
+  renderer.setSize(innerWidth, innerHeight)
+  composer.setSize(innerWidth, innerHeight)
+})
+</script>
+</body>
+</html>

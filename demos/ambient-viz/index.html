@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ambient Machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Fira+Code:wght@400;500&display=swap">
+<style>
+:root{ --bg:#eef2ec; --surface:#fcfdfc; --ink:#192612; --muted:#78886f; --hairline:#d3decd; --accent:#295db7; --accent-2:#c82d66; --warn:#f2ad0d; --error:#e62019; }
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  background-color:var(--bg);
+  background-image:radial-gradient(var(--hairline) 1.1px, transparent 1.1px);
+  background-size:22px 22px;
+  color:var(--ink);
+  font-family:'Fira Code', monospace;
+  min-height:100%;
+  padding:28px;
+}
+
+.wrap{ max-width:1180px; margin:0 auto; }
+
+header.hero{ margin-bottom:22px; }
+header.hero h1{
+  font-family:'Space Mono', monospace;
+  font-weight:700;
+  font-size:clamp(30px,5vw,52px);
+  letter-spacing:-1.5px;
+  line-height:0.98;
+  color:var(--ink);
+}
+header.hero p{
+  font-size:14px;
+  color:var(--muted);
+  margin-top:8px;
+  max-width:520px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  grid-auto-rows:minmax(10px,auto);
+  gap:18px;
+}
+
+.card{
+  background:var(--surface);
+  border-radius:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.14);
+  padding:18px;
+}
+
+.card .label{
+  font-family:'Space Mono', monospace;
+  font-size:11px;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:12px;
+}
+
+/* hero card spans two rows */
+.stage{
+  grid-column:1;
+  grid-row:1 / span 2;
+  display:flex;
+  flex-direction:column;
+  padding:14px;
+}
+.canvas-hold{
+  position:relative;
+  flex:1;
+  border-radius:10px;
+  overflow:hidden;
+  background:#0d1410;
+  min-height:440px;
+}
+canvas{ display:block; width:100%; height:100%; }
+
+#overlay{
+  position:absolute; inset:0;
+  display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+  background:rgba(13,20,16,.72);
+  cursor:pointer;
+  text-align:center;
+}
+#overlay .big{
+  font-family:'Space Mono', monospace;
+  font-weight:700;
+  font-size:26px;
+  color:var(--surface);
+}
+#overlay .sub{
+  font-size:12px;
+  color:var(--hairline);
+  margin-top:10px;
+  letter-spacing:1px;
+}
+#overlay .disc{
+  margin-top:22px;
+  width:64px; height:64px;
+  border-radius:50%;
+  border:2px solid var(--accent-2);
+  display:flex; align-items:center; justify-content:center;
+  color:var(--surface);
+  font-size:24px;
+}
+#overlay.hidden{ display:none; }
+
+/* controls card */
+.controls .btn-row{ display:flex; gap:10px; }
+button{
+  font-family:'Space Mono', monospace;
+  font-size:13px;
+  font-weight:700;
+  border:none;
+  border-radius:14px;
+  padding:14px 16px;
+  cursor:pointer;
+  color:var(--surface);
+  background:var(--accent);
+  flex:1;
+}
+button.ghost{
+  background:var(--surface);
+  color:var(--ink);
+  box-shadow:0 6px 18px rgba(0,0,0,.10);
+}
+button.warn{ background:var(--accent-2); }
+button:disabled{ opacity:.45; cursor:not-allowed; }
+
+.modes{ display:flex; flex-direction:column; gap:10px; margin-top:6px; }
+.mode-btn{
+  display:flex; align-items:center; gap:12px;
+  background:var(--surface);
+  color:var(--ink);
+  border-radius:14px;
+  padding:14px;
+  text-align:left;
+  box-shadow:0 6px 18px rgba(0,0,0,.08);
+}
+.mode-btn .dot{
+  width:12px; height:12px; border-radius:50%;
+  background:var(--hairline);
+  flex:none;
+}
+.mode-btn.active{ background:var(--accent); color:var(--surface); }
+.mode-btn.active .dot{ background:var(--warn); }
+.mode-btn .mtitle{ font-family:'Space Mono',monospace; font-size:13px; font-weight:700; }
+.mode-btn .msub{ font-size:11px; color:var(--muted); }
+.mode-btn.active .msub{ color:var(--hairline); }
+
+.meter-card{ grid-column:2; }
+.meter{ height:12px; border-radius:8px; background:var(--bg); overflow:hidden; }
+.meter > i{ display:block; height:100%; width:0%; background:var(--accent-2); }
+.stat-row{ display:flex; justify-content:space-between; margin-top:14px; font-size:12px; color:var(--muted); }
+.stat-row b{ font-family:'Space Mono',monospace; color:var(--ink); font-weight:700; }
+
+.foot{ margin-top:18px; font-size:11px; color:var(--muted); letter-spacing:1px; }
+
+@media(max-width:820px){
+  .grid{ grid-template-columns:1fr; }
+  .stage{ grid-column:1; grid-row:auto; }
+  .meter-card{ grid-column:1; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <h1>Ambient Machine</h1>
+    <p>A generative drone that writes itself — no audio files, just oscillators, filters and a slow feedback delay. Click the stage to wake it.</p>
+  </header>
+
+  <div class="grid">
+    <section class="card stage">
+      <div class="label">Visualiser</div>
+      <div class="canvas-hold">
+        <canvas id="c"></canvas>
+        <div id="overlay">
+          <div class="big">Click to begin</div>
+          <div class="sub">generative ambient · web audio</div>
+          <div class="disc">&#9654;</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card controls">
+      <div class="label">Transport</div>
+      <div class="btn-row">
+        <button id="playBtn">START</button>
+        <button id="muteBtn" class="warn" disabled>MUTE</button>
+      </div>
+      <div class="label" style="margin-top:20px;">Modes</div>
+      <div class="modes" id="modes">
+        <button class="mode-btn active" data-mode="0">
+          <span class="dot"></span>
+          <span><span class="mtitle">Radial Spectrum</span><br><span class="msub">frequency petals</span></span>
+        </button>
+        <button class="mode-btn" data-mode="1">
+          <span class="dot"></span>
+          <span><span class="mtitle">Oscilloscope</span><br><span class="msub">waveform ribbon</span></span>
+        </button>
+        <button class="mode-btn" data-mode="2">
+          <span class="dot"></span>
+          <span><span class="mtitle">Orbit Field</span><br><span class="msub">reactive particles</span></span>
+        </button>
+      </div>
+    </section>
+
+    <section class="card meter-card">
+      <div class="label">Signal</div>
+      <div class="meter"><i id="meterFill"></i></div>
+      <div class="stat-row"><span>Level</span><b id="lvl">0%</b></div>
+      <div class="stat-row"><span>Voices</span><b id="voices">0</b></div>
+      <div class="stat-row"><span>Root note</span><b id="root">—</b></div>
+    </section>
+  </div>
+
+  <div class="foot">SPACE MONO / FIRA CODE · TRIADIC PASTEL · SELF-CONTAINED</div>
+</div>
+
+<script>
+"use strict";
+
+// ---- palette pulled from CSS vars so the canvas matches the page ----
+const css = getComputedStyle(document.documentElement);
+const COL = {
+  ground:  "#0d1410",
+  accent:  css.getPropertyValue('--accent').trim(),
+  accent2: css.getPropertyValue('--accent-2').trim(),
+  warn:    css.getPropertyValue('--warn').trim(),
+  surface: css.getPropertyValue('--surface').trim(),
+  muted:   css.getPropertyValue('--muted').trim()
+};
+
+// ---------------------------------------------------------------- audio
+let ctx = null, master = null, analyser = null, freqData = null, timeData = null;
+let started = false, muted = false;
+let voices = 0, rootName = "—";
+let schedulerId = null;
+
+// A major pentatonic across a few octaves — always consonant, ambient-safe.
+const SCALE = [];
+const baseFreqs = [220.00, 246.94, 293.66, 329.63, 392.00]; // A B D E G
+const NOTE_NAMES = ["A3","B3","D4","E4","G4"];
+for (let oct = 0; oct < 3; oct++){
+  for (let i = 0; i < baseFreqs.length; i++){
+    SCALE.push({ f: baseFreqs[i] * Math.pow(2, oct), name: NOTE_NAMES[i] });
+  }
+}
+
+function buildGraph(){
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+  master = ctx.createGain();
+  master.gain.value = 0.0;
+
+  // gentle master lowpass so highs never get harsh
+  const tone = ctx.createBiquadFilter();
+  tone.type = "lowpass";
+  tone.frequency.value = 2600;
+  tone.Q.value = 0.4;
+
+  // feedback delay = cheap reverb tail
+  const delay = ctx.createDelay(2.0);
+  delay.delayTime.value = 0.55;
+  const fb = ctx.createGain();
+  fb.gain.value = 0.42;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.5;
+  delay.connect(fb); fb.connect(delay);
+  delay.connect(wet);
+
+  analyser = ctx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.82;
+  freqData = new Uint8Array(analyser.frequencyBinCount);
+  timeData = new Uint8Array(analyser.fftSize);
+
+  // routing: tone -> master ; tone -> delay -> wet -> master ; master -> analyser -> out
+  tone.connect(master);
+  tone.connect(delay);
+  wet.connect(master);
+  master.connect(analyser);
+  analyser.connect(ctx.destination);
+
+  buildGraph.tone = tone;
+
+  // fade in
+  master.gain.setValueAtTime(0.0, ctx.currentTime);
+  master.gain.linearRampToValueAtTime(0.9, ctx.currentTime + 3.0);
+}
+
+// two slow drone pads that live for the whole session
+function startDrones(){
+  const dest = buildGraph.tone;
+  [0, 7].forEach((idx, k) => {
+    const o = ctx.createOscillator();
+    o.type = k === 0 ? "sawtooth" : "triangle";
+    const note = SCALE[idx];
+    o.frequency.value = note.f / (k === 0 ? 2 : 1);
+    const g = ctx.createGain();
+    g.gain.value = 0.0;
+    o.connect(g); g.connect(dest);
+    o.start();
+    g.gain.setValueAtTime(0.0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(k === 0 ? 0.10 : 0.06, ctx.currentTime + 4);
+    // slow detune wobble
+    const lfo = ctx.createOscillator();
+    lfo.frequency.value = 0.05 + Math.random()*0.08;
+    const lfoAmt = ctx.createGain();
+    lfoAmt.gain.value = 2.5;
+    lfo.connect(lfoAmt); lfoAmt.connect(o.detune);
+    lfo.start();
+    voices++;
+  });
+  if (k = SCALE[0]) rootName = "A";
+  document.getElementById('root').textContent = "A pent";
+  document.getElementById('voices').textContent = voices;
+}
+let k; // guard used above
+
+// pluck a soft bell/marimba-ish note
+function playNote(){
+  if (!ctx) return;
+  const note = SCALE[Math.floor(Math.random()*SCALE.length)];
+  const now = ctx.currentTime;
+  const dest = buildGraph.tone;
+
+  const o = ctx.createOscillator();
+  o.type = Math.random() < 0.5 ? "sine" : "triangle";
+  o.frequency.value = note.f;
+
+  const g = ctx.createGain();
+  const peak = 0.16 + Math.random()*0.10;
+  g.gain.setValueAtTime(0.0001, now);
+  g.gain.exponentialRampToValueAtTime(peak, now + 0.04);
+  g.gain.exponentialRampToValueAtTime(0.0001, now + 2.6 + Math.random()*1.5);
+
+  const f = ctx.createBiquadFilter();
+  f.type = "bandpass";
+  f.frequency.value = note.f * (1.5 + Math.random());
+  f.Q.value = 3;
+
+  o.connect(f); f.connect(g); g.connect(dest);
+  o.start(now);
+  o.stop(now + 4.5);
+}
+
+function scheduleLoop(){
+  // sparse, breathing rhythm
+  if (Math.random() < 0.7) playNote();
+  if (Math.random() < 0.25) setTimeout(playNote, 220 + Math.random()*260);
+  const next = 900 + Math.random()*1700;
+  schedulerId = setTimeout(scheduleLoop, next);
+}
+
+// ---------------------------------------------------------------- canvas
+const canvas = document.getElementById('c');
+const g = canvas.getContext('2d');
+let W = 0, H = 0, DPR = Math.min(devicePixelRatio || 1, 2);
+let mode = 0;
+let t = 0;
+const particles = [];
+
+function resize(){
+  const r = canvas.parentElement.getBoundingClientRect();
+  W = r.width; H = r.height;
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+addEventListener('resize', resize);
+
+function initParticles(){
+  particles.length = 0;
+  for (let i = 0; i < 90; i++){
+    particles.push({
+      a: Math.random()*Math.PI*2,
+      r: 40 + Math.random()*160,
+      spd: 0.002 + Math.random()*0.01,
+      size: 1 + Math.random()*2.5,
+      band: Math.floor(Math.random()*32)
+    });
+  }
+}
+initParticles();
+
+function bump(){ // overall loudness 0..1
+  if (!analyser) return 0;
+  let s = 0;
+  for (let i = 0; i < 64; i++) s += freqData[i];
+  return (s / 64) / 255;
+}
+
+function drawGround(){
+  g.fillStyle = COL.ground;
+  g.fillRect(0, 0, W, H);
+}
+
+function neonStroke(color, width, glow){
+  g.strokeStyle = color;
+  g.lineWidth = width;
+  g.shadowColor = color;
+  g.shadowBlur = glow;
+}
+
+function speedVignette(level){
+  // tightens with loudness
+  const inner = Math.max(40, Math.min(W,H)*0.55 - level*160);
+  const grd = g.createRadialGradient(W/2,H/2,inner, W/2,H/2, Math.max(W,H)*0.72);
+  grd.addColorStop(0, "rgba(13,20,16,0)");
+  grd.addColorStop(1, "rgba(13,20,16," + (0.55 + level*0.4).toFixed(3) + ")");
+  g.fillStyle = grd;
+  g.fillRect(0,0,W,H);
+}
+
+function modeRadial(level){
+  const cx = W/2, cy = H/2;
+  const bins = 96;
+  const rBase = Math.min(W,H) * 0.16;
+  g.save();
+  g.translate(cx, cy);
+  g.rotate(t*0.05);
+  neonStroke(COL.accent, 2, 16);
+  for (let i = 0; i < bins; i++){
+    const v = freqData[i*2] / 255;
+    const ang = (i / bins) * Math.PI * 2;
+    const len = rBase + v * (Math.min(W,H)*0.34);
+    const x1 = Math.cos(ang)*rBase, y1 = Math.sin(ang)*rBase;
+    const x2 = Math.cos(ang)*len,   y2 = Math.sin(ang)*len;
+    g.strokeStyle = i % 3 === 0 ? COL.accent2 : (i % 3 === 1 ? COL.accent : COL.warn);
+    g.shadowColor = g.strokeStyle;
+    g.beginPath();
+    g.moveTo(x1,y1); g.lineTo(x2,y2);
+    g.stroke();
+    g.beginPath();
+    g.arc(x2,y2, 1.6 + v*2.5, 0, Math.PI*2);
+    g.fillStyle = g.strokeStyle;
+    g.fill();
+  }
+  // pulsing core ring
+  neonStroke(COL.warn, 1.5, 20);
+  g.beginPath();
+  g.arc(0,0, rBase*(0.6 + level*0.6), 0, Math.PI*2);
+  g.stroke();
+  g.restore();
+}
+
+function modeScope(level){
+  neonStroke(COL.accent2, 2.2, 18);
+  g.beginPath();
+  const N = timeData.length;
+  const mid = H/2;
+  for (let i = 0; i < N; i++){
+    const x = (i / (N-1)) * W;
+    const v = (timeData[i] - 128) / 128;
+    const y = mid + v * (H*0.36);
+    if (i === 0) g.moveTo(x,y); else g.lineTo(x,y);
+  }
+  g.stroke();
+
+  // mirror ghost in accent
+  neonStroke(COL.accent, 1.2, 10);
+  g.globalAlpha = 0.5;
+  g.beginPath();
+  for (let i = 0; i < N; i++){
+    const x = (i / (N-1)) * W;
+    const v = (timeData[i] - 128) / 128;
+    const y = mid - v * (H*0.36) * 0.7;
+    if (i === 0) g.moveTo(x,y); else g.lineTo(x,y);
+  }
+  g.stroke();
+  g.globalAlpha = 1;
+
+  // baseline grid ticks (neon wireframe feel)
+  neonStroke(COL.warn, 0.6, 6);
+  g.globalAlpha = 0.35;
+  for (let x = 0; x < W; x += W/16){
+    g.beginPath(); g.moveTo(x, mid-4); g.lineTo(x, mid+4); g.stroke();
+  }
+  g.globalAlpha = 1;
+}
+
+function modeOrbit(level){
+  const cx = W/2, cy = H/2;
+  for (const p of particles){
+    const v = freqData[p.band] / 255;
+    p.a += p.spd * (1 + v*3);
+    const rr = p.r * (0.7 + v*0.9);
+    const x = cx + Math.cos(p.a)*rr;
+    const y = cy + Math.sin(p.a)*rr * 0.72;
+    const col = p.band < 11 ? COL.accent2 : (p.band < 22 ? COL.accent : COL.warn);
+    g.fillStyle = col;
+    g.shadowColor = col;
+    g.shadowBlur = 8 + v*22;
+    g.beginPath();
+    g.arc(x, y, p.size + v*4, 0, Math.PI*2);
+    g.fill();
+    // link line to centre when loud
+    if (v > 0.5){
+      neonStroke(col, 0.5, 6);
+      g.globalAlpha = (v-0.5)*0.8;
+      g.beginPath(); g.moveTo(cx,cy); g.lineTo(x,y); g.stroke();
+      g.globalAlpha = 1;
+    }
+  }
+  // core
+  neonStroke(COL.surface, 1, 24);
+  g.beginPath();
+  g.arc(cx,cy, 6 + level*40, 0, Math.PI*2);
+  g.stroke();
+}
+
+function frame(){
+  requestAnimationFrame(frame);
+  t += 0.016;
+  if (analyser){
+    analyser.getByteFrequencyData(freqData);
+    analyser.getByteTimeDomainData(timeData);
+  }
+  const level = bump();
+
+  drawGround();
+  g.shadowBlur = 0;
+
+  if (started){
+    if (mode === 0) modeRadial(level);
+    else if (mode === 1) modeScope(level);
+    else modeOrbit(level);
+    speedVignette(level);
+  } else {
+    // idle: faint breathing ring so the stage isn't a dead rectangle
+    g.save();
+    g.translate(W/2, H/2);
+    neonStroke(COL.accent, 1, 14);
+    g.globalAlpha = 0.4 + 0.2*Math.sin(t*1.5);
+    g.beginPath();
+    g.arc(0,0, 30 + 6*Math.sin(t*1.5), 0, Math.PI*2);
+    g.stroke();
+    g.restore();
+    g.globalAlpha = 1;
+  }
+  g.shadowBlur = 0;
+
+  // UI meter
+  const pct = Math.round(level*100);
+  meterFill.style.width = Math.min(100,pct) + "%";
+  lvl.textContent = pct + "%";
+}
+
+// ---------------------------------------------------------------- controls
+const overlay = document.getElementById('overlay');
+const playBtn = document.getElementById('playBtn');
+const muteBtn = document.getElementById('muteBtn');
+const meterFill = document.getElementById('meterFill');
+const lvl = document.getElementById('lvl');
+
+function startAudio(){
+  if (started) return;
+  buildGraph();
+  ctx.resume().then(() => {
+    startDrones();
+    scheduleLoop();
+    started = true;
+    overlay.classList.add('hidden');
+    playBtn.textContent = "STOP";
+    muteBtn.disabled = false;
+  });
+}
+
+function stopAudio(){
+  if (!started) return;
+  clearTimeout(schedulerId);
+  if (master) master.gain.linearRampToValueAtTime(0.0001, ctx.currentTime + 0.6);
+  setTimeout(() => { if (ctx) ctx.close(); ctx = null; analyser = null; }, 800);
+  started = false; muted = false; voices = 0;
+  overlay.classList.remove('hidden');
+  playBtn.textContent = "START";
+  muteBtn.disabled = true; muteBtn.textContent = "MUTE";
+  document.getElementById('voices').textContent = "0";
+  document.getElementById('root').textContent = "—";
+}
+
+overlay.addEventListener('click', startAudio);
+playBtn.addEventListener('click', () => started ? stopAudio() : startAudio());
+
+muteBtn.addEventListener('click', () => {
+  if (!started || !master) return;
+  muted = !muted;
+  master.gain.cancelScheduledValues(ctx.currentTime);
+  master.gain.linearRampToValueAtTime(muted ? 0.0001 : 0.9, ctx.currentTime + 0.25);
+  muteBtn.textContent = muted ? "UNMUTE" : "MUTE";
+  muteBtn.classList.toggle('ghost', muted);
+});
+
+document.getElementById('modes').addEventListener('click', (e) => {
+  const b = e.target.closest('.mode-btn');
+  if (!b) return;
+  mode = parseInt(b.dataset.mode, 10);
+  document.querySelectorAll('.mode-btn').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+});
+
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Winter Hollow</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
+<style>
+:root{ --bg:#e5dfe8; --surface:#f3f2f4; --ink:#26172c; --muted:#75657b; --hairline:#cdc2d2; --accent:#bbe50f; --accent-2:#0fe639; --warn:#f2ad0d; --error:#e62019; }
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',sans-serif;min-height:100vh;display:flex}
+aside{width:72px;flex:none;display:flex;align-items:flex-end;justify-content:center;padding:34px 0}
+aside .brand{writing-mode:vertical-rl;transform:rotate(180deg);font-family:'Manrope',sans-serif;font-weight:800;letter-spacing:6px;font-size:13px;color:var(--muted);text-transform:uppercase}
+main{flex:1;max-width:1180px;padding:56px 64px 80px 12px}
+.kicker{font-size:12px;letter-spacing:4px;text-transform:uppercase;color:var(--muted);margin-bottom:18px}
+h1{font-family:'Manrope',sans-serif;font-weight:800;font-size:clamp(48px,7vw,92px);line-height:.95;letter-spacing:-2px;margin-bottom:10px}
+h1 em{font-style:normal;color:var(--muted)}
+.lede{max-width:520px;color:var(--muted);font-size:15px;line-height:1.6;margin-bottom:34px}
+.grid{display:grid;grid-template-columns:1fr 220px;gap:28px;align-items:start}
+.stagecard{background:var(--surface);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:14px;overflow:hidden}
+canvas{display:block;width:100%;border-radius:14px}
+.rail{display:flex;flex-direction:column;gap:22px}
+.bignum{font-family:'Manrope',sans-serif;font-weight:800;font-size:64px;letter-spacing:-3px;line-height:1}
+.bignum small{display:block;font-size:11px;letter-spacing:3px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-top:6px}
+.ctrl{background:var(--surface);border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.14);padding:20px}
+.ctrl label{display:block;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.ctrl+.ctrl{margin-top:0}
+input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+button{font-family:'Manrope',sans-serif;font-weight:800;font-size:13px;letter-spacing:2px;text-transform:uppercase;background:var(--accent);color:var(--ink);border:none;border-radius:14px;padding:14px 0;width:100%;cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.14)}
+button.off{background:var(--surface);color:var(--muted)}
+.quote{grid-column:1/-1;max-width:640px;font-family:'Manrope',sans-serif;font-weight:600;font-size:22px;line-height:1.4;color:var(--muted);margin-top:14px}
+.quote b{color:var(--ink)}
+</style>
+</head>
+<body>
+<aside><div class="brand">Pallarium · Scenes</div></aside>
+<main>
+  <div class="kicker">Scene 04 — Procedural Painting</div>
+  <h1>Winter <em>Hollow</em></h1>
+  <p class="lede">A painted pine hollow under living weather — snow drifts down, the trees lean with the wind, smoke curls from the hut, and the sky rolls through a full day and night on its own.</p>
+  <div class="grid">
+    <div class="stagecard"><canvas id="c" width="1280" height="720"></canvas></div>
+    <div class="rail">
+      <div class="bignum"><span id="clock">18:00</span><small>scene time</small></div>
+      <div class="ctrl">
+        <label>Day speed</label>
+        <input type="range" id="spd" min="0" max="8" step="0.1" value="2">
+      </div>
+      <div class="ctrl">
+        <label>Snowfall</label>
+        <input type="range" id="snw" min="0" max="420" step="10" value="240">
+      </div>
+      <button id="pause">Pause sky</button>
+    </div>
+    <p class="quote">The window stays <b>lit all night</b> — watch for the aurora when the stars come out.</p>
+  </div>
+</main>
+<script>
+const cv = document.getElementById('c')
+const cx = cv.getContext('2d')
+const W = cv.width, H = cv.height
+
+/** hex -> [r,g,b] */
+const rgb = h => h[0] === '#'
+  ? [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+  : h.match(/\d+/g).map(Number)
+/** blend two hex colors */
+const mix = (a, b, t) => {
+  const A = rgb(a), B = rgb(b)
+  return 'rgb(' + A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',') + ')'
+}
+const P = getComputedStyle(document.documentElement)
+const col = n => P.getPropertyValue('--' + n).trim()
+const BG = col('bg'), SURF = col('surface'), INK = col('ink'), MUT = col('muted')
+const HAIR = col('hairline'), ACC = col('accent'), ACC2 = col('accent-2'), WARN = col('warn')
+const DARK = '#0d0812'
+
+const rnd = (() => { let s = 894634712; return () => (s = s * 16807 % 2147483647) / 2147483647 })()
+
+// ---- static scene geometry ----
+const stars = Array.from({ length: 140 }, () => ({ x: rnd() * W, y: rnd() * H * .55, r: .5 + rnd() * 1.3, p: rnd() * 7 }))
+const ridges = [
+  { yb: H * .58, amp: 70, freq: .0035, ph: 1.7, t: .55 },
+  { yb: H * .64, amp: 95, freq: .0022, ph: 4.2, t: .35 }
+]
+const mkTrees = (y, n, s0, s1, depth) => Array.from({ length: n }, () => ({
+  x: rnd() * W, y: y + rnd() * 18, s: s0 + rnd() * (s1 - s0), d: depth, ph: rnd() * 7
+}))
+const treeLayers = [
+  mkTrees(H * .66, 26, 40, 70, .30),
+  mkTrees(H * .74, 18, 70, 110, .60),
+  mkTrees(H * .86, 10, 110, 165, 1.0)
+]
+const HUT = { x: W * .68, y: H * .83, w: 190, h: 110 }
+const flakes = Array.from({ length: 420 }, () => ({
+  x: rnd() * W, y: rnd() * H, z: .3 + rnd() * .7, ph: rnd() * 7
+}))
+const smoke = []
+
+let tod = .78, speed = 2, snowN = 240, paused = false, last = 0
+document.getElementById('spd').oninput = e => { speed = +e.target.value }
+document.getElementById('snw').oninput = e => { snowN = +e.target.value }
+document.getElementById('pause').onclick = e => {
+  paused = !paused
+  e.target.textContent = paused ? 'Resume sky' : 'Pause sky'
+  e.target.classList.toggle('off', paused)
+}
+
+const smooth = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }
+
+const pine = (x, y, s, fill, sway) => {
+  cx.fillStyle = fill
+  cx.beginPath()
+  const tiers = 3
+  for (let i = 0; i < tiers; i++) {
+    const ty = y - s * (.28 + i * .24)
+    const tw = s * (.46 - i * .12)
+    const lean = sway * (i + 1) / tiers * s * .06
+    cx.moveTo(x - tw, ty)
+    cx.lineTo(x + lean, ty - s * .34)
+    cx.lineTo(x + tw, ty)
+  }
+  cx.rect(x - s * .035, y - s * .3, s * .07, s * .3)
+  cx.fill()
+}
+
+const draw = ts => {
+  const dt = Math.min(.05, (ts - last) / 1000 || 0)
+  last = ts
+  if (!paused) tod = (tod + dt * speed / 120) % 1
+  const time = ts / 1000
+  const elev = -Math.cos(tod * Math.PI * 2)
+  const day = smooth(-.12, .32, elev)
+  const dusk = Math.max(0, 1 - Math.abs(elev) / .32)
+  const night = 1 - day
+
+  // sky
+  const top = mix(DARK, BG, day)
+  let bot = mix(mix(INK, SURF, day), WARN, dusk * .45)
+  const g = cx.createLinearGradient(0, 0, 0, H * .7)
+  g.addColorStop(0, top); g.addColorStop(1, bot)
+  cx.fillStyle = g
+  cx.fillRect(0, 0, W, H)
+
+  // stars
+  if (night > .05) {
+    for (const s of stars) {
+      cx.globalAlpha = night * (.35 + .65 * Math.abs(Math.sin(time * .8 + s.p)))
+      cx.fillStyle = SURF
+      cx.fillRect(s.x, s.y, s.r, s.r)
+    }
+    cx.globalAlpha = 1
+  }
+
+  // aurora — deep night only
+  if (night > .75) {
+    const a = (night - .75) / .25
+    for (let b = 0; b < 3; b++) {
+      cx.globalAlpha = a * .10
+      cx.fillStyle = b === 1 ? ACC2 : ACC
+      cx.beginPath()
+      for (let x = 0; x <= W; x += 16) {
+        const y = H * .16 + b * 26 + Math.sin(x * .004 + time * .5 + b * 2) * 34 + Math.sin(x * .011 - time * .3) * 12
+        x === 0 ? cx.moveTo(x, y) : cx.lineTo(x, y)
+      }
+      for (let x = W; x >= 0; x -= 16) {
+        const y = H * .16 + b * 26 + Math.sin(x * .004 + time * .5 + b * 2) * 34 + Math.sin(x * .011 - time * .3) * 12
+        cx.lineTo(x, y + 60 + b * 8)
+      }
+      cx.fill()
+    }
+    cx.globalAlpha = 1
+  }
+
+  // sun / moon
+  const arc = p => ({ x: -60 + (W + 120) * p, y: H * .72 - Math.sin(p * Math.PI) * H * .58 })
+  if (tod > .25 && tod < .75) {
+    const s = arc((tod - .25) / .5)
+    const sg = cx.createRadialGradient(s.x, s.y, 4, s.x, s.y, 90)
+    sg.addColorStop(0, WARN); sg.addColorStop(1, 'rgba(242,173,13,0)')
+    cx.fillStyle = sg; cx.fillRect(s.x - 90, s.y - 90, 180, 180)
+    cx.fillStyle = mix(WARN, SURF, .55)
+    cx.beginPath(); cx.arc(s.x, s.y, 26, 0, 7); cx.fill()
+  } else {
+    const p = ((tod + .25) % 1) / .5
+    const m = arc(p)
+    cx.fillStyle = mix(SURF, HAIR, .3)
+    cx.beginPath(); cx.arc(m.x, m.y, 20, 0, 7); cx.fill()
+    cx.fillStyle = mix(DARK, BG, day * .9 + .06)
+    cx.beginPath(); cx.arc(m.x + 8, m.y - 5, 17, 0, 7); cx.fill()
+  }
+
+  // ridges
+  for (const r of ridges) {
+    cx.fillStyle = mix(mix(DARK, MUT, .5 + day * .3), bot === top ? bot : mix(HAIR, MUT, .5), (1 - r.t) * day * .6)
+    cx.beginPath()
+    cx.moveTo(0, H)
+    for (let x = 0; x <= W; x += 12) {
+      cx.lineTo(x, r.yb - Math.abs(Math.sin(x * r.freq + r.ph)) * r.amp - Math.sin(x * .01 + r.ph) * 14)
+    }
+    cx.lineTo(W, H)
+    cx.fill()
+  }
+
+  // snow ground
+  cx.fillStyle = mix(mix(INK, MUT, .4), SURF, .25 + day * .72)
+  cx.beginPath()
+  cx.moveTo(0, H)
+  for (let x = 0; x <= W; x += 20) cx.lineTo(x, H * .78 + Math.sin(x * .006 + 2) * 16)
+  cx.lineTo(W, H)
+  cx.fill()
+
+  // tree layers, back to front
+  const wind = Math.sin(time * .7) * .6 + Math.sin(time * .23) * .4
+  treeLayers.forEach((layer, i) => {
+    const shade = mix(mix(DARK, INK, .7), mix(MUT, INK, .3), (1 - [.3, .6, 1][i]) + day * .35)
+    for (const t of layer) pine(t.x, t.y, t.s, shade, wind * Math.sin(time * .9 + t.ph) * .5)
+  })
+
+  // hut
+  const hx = HUT.x, hy = HUT.y, hw = HUT.w, hh = HUT.h
+  cx.fillStyle = mix(DARK, INK, .5 + day * .4)
+  cx.fillRect(hx, hy - hh, hw, hh)
+  cx.beginPath()
+  cx.moveTo(hx - 18, hy - hh)
+  cx.lineTo(hx + hw / 2, hy - hh - 62)
+  cx.lineTo(hx + hw + 18, hy - hh)
+  cx.fill()
+  cx.fillStyle = mix(SURF, BG, .3)
+  cx.beginPath()
+  cx.moveTo(hx - 18, hy - hh)
+  cx.lineTo(hx + hw / 2, hy - hh - 62)
+  cx.lineTo(hx + hw + 18, hy - hh)
+  cx.lineTo(hx + hw + 10, hy - hh + 6)
+  cx.lineTo(hx + hw / 2, hy - hh - 50)
+  cx.lineTo(hx - 10, hy - hh + 6)
+  cx.fill()
+  cx.fillRect(hx + hw * .72, hy - hh - 96, 20, 44)
+  // window — warm glow, brighter at night
+  const wx = hx + 40, wy = hy - 62, glow = .35 + night * .65
+  const wg = cx.createRadialGradient(wx + 17, wy + 17, 4, wx + 17, wy + 17, 70)
+  wg.addColorStop(0, 'rgba(242,173,13,' + (.55 * glow) + ')')
+  wg.addColorStop(1, 'rgba(242,173,13,0)')
+  cx.fillStyle = wg; cx.fillRect(wx - 60, wy - 60, 155, 155)
+  cx.fillStyle = mix(WARN, INK, .15 * day)
+  cx.fillRect(wx, wy, 34, 34)
+  cx.fillStyle = mix(DARK, INK, .5)
+  cx.fillRect(wx + 15, wy, 4, 34); cx.fillRect(wx, wy + 15, 34, 4)
+
+  // chimney smoke
+  if (Math.random() < .3) smoke.push({ x: hx + hw * .72 + 10, y: hy - hh - 96, a: .35, r: 4 + Math.random() * 3, vx: 0 })
+  for (let i = smoke.length - 1; i >= 0; i--) {
+    const s = smoke[i]
+    s.y -= 22 * dt; s.x += (wind * 14 + 6) * dt + Math.sin(s.y * .05) * .3
+    s.r += 7 * dt; s.a -= .09 * dt
+    if (s.a <= 0) { smoke.splice(i, 1); continue }
+    cx.globalAlpha = s.a
+    cx.fillStyle = mix(HAIR, SURF, night * .5)
+    cx.beginPath(); cx.arc(s.x, s.y, s.r, 0, 7); cx.fill()
+  }
+  cx.globalAlpha = 1
+
+  // snowfall
+  cx.fillStyle = SURF
+  for (let i = 0; i < snowN; i++) {
+    const f = flakes[i]
+    f.y += (28 + f.z * 65) * dt
+    f.x += (wind * 26 * f.z + Math.sin(time * 1.4 + f.ph) * 12) * dt
+    if (f.y > H) { f.y = -6; f.x = rnd() * W }
+    if (f.x > W + 8) f.x = -8
+    if (f.x < -8) f.x = W + 8
+    cx.globalAlpha = .35 + f.z * .6
+    cx.beginPath(); cx.arc(f.x, f.y, .8 + f.z * 2.1, 0, 7); cx.fill()
+  }
+  cx.globalAlpha = 1
+
+  // vignette-free painterly grain pass: soft cold tint at night
+  if (night > .3) {
+    cx.globalAlpha = (night - .3) * .12
+    cx.fillStyle = INK
+    cx.fillRect(0, 0, W, H)
+    cx.globalAlpha = 1
+  }
+
+  const mins = Math.floor(tod * 1440)
+  document.getElementById('clock').textContent =
+    String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0')
+  requestAnimationFrame(draw)
+}
+requestAnimationFrame(draw)
+</script>
+</body>
+</html>

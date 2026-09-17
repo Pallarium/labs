@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Storm</title>
+<style>
+html,body{margin:0;height:100%;background:#07080c;overflow:hidden;font-family:'Segoe UI',system-ui,sans-serif;color:#9aa0b4}
+canvas{display:block;width:100vw;height:100vh;cursor:crosshair}
+.hud{position:fixed;left:20px;bottom:18px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;line-height:1.7;pointer-events:none}
+.hud b{color:#e6e8ef;font-weight:600}
+.fps{position:fixed;right:20px;top:16px;font-size:12px;letter-spacing:.08em;color:#e6e8ef}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="hud"><b>Particle Storm</b> · 500k particles, GPU transform feedback<br>Move mouse to attract · Hold click to repel · Drag orbit</div>
+<div class="fps" id="fps">-- fps</div>
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', { antialias: false });
+const N = 500000;
+
+const updateVS = `#version 300 es
+in vec3 aPos; in vec3 aVel;
+out vec3 vPos; out vec3 vVel;
+uniform float uDt; uniform float uTime; uniform vec3 uMouse; uniform float uRepel;
+vec3 hash(vec3 p){ p=fract(p*vec3(.1031,.1030,.0973)); p+=dot(p,p.yxz+33.33); return fract((p.xxy+p.yxx)*p.zyx)*2.-1.; }
+vec3 curl(vec3 p){
+  float e=.1;
+  vec3 dx=hash(p+vec3(e,0,0))-hash(p-vec3(e,0,0));
+  vec3 dy=hash(p+vec3(0,e,0))-hash(p-vec3(0,e,0));
+  vec3 dz=hash(p+vec3(0,0,e))-hash(p-vec3(0,0,e));
+  return vec3(dy.z-dz.y, dz.x-dx.z, dx.y-dy.x);
+}
+void main(){
+  vec3 p=aPos, v=aVel;
+  vec3 toM=uMouse-p; float d=length(toM)+.05;
+  vec3 g=toM/d*(1.2/(d*d+.4));
+  v+=g*uDt*(uRepel>.5?-3.:1.);
+  v+=curl(p*.6+uTime*.05)*uDt*1.5;
+  vec3 c=vec3(sin(uTime*.3)*1.2,cos(uTime*.23)*.8,sin(uTime*.17)*1.2);
+  v+=(c-p)*uDt*.15;
+  v*=.985;
+  p+=v*uDt;
+  if(length(p)>9.){ p=normalize(hash(p+uTime))*2.; v=vec3(0); }
+  vPos=p; vVel=v;
+}`;
+const updateFS = `#version 300 es
+precision mediump float; out vec4 o; void main(){ o=vec4(0); }`;
+
+const drawVS = `#version 300 es
+in vec3 aPos; in vec3 aVel;
+uniform mat4 uProj; uniform mat4 uView; uniform float uPx;
+out float vSpeed; out float vDepth;
+void main(){
+  vec4 vp=uView*vec4(aPos,1.);
+  gl_Position=uProj*vp;
+  gl_PointSize=max(1.,uPx*1.6/-vp.z);
+  vSpeed=length(aVel); vDepth=-vp.z;
+}`;
+const drawFS = `#version 300 es
+precision mediump float;
+in float vSpeed; in float vDepth; out vec4 o;
+void main(){
+  float s=clamp(vSpeed*.55,0.,1.);
+  vec3 cold=vec3(.12,.28,.9), mid=vec3(.2,.85,1.), hot=vec3(1.,.55,.25);
+  vec3 col=mix(cold,mid,smoothstep(0.,.5,s)); col=mix(col,hot,smoothstep(.5,1.,s));
+  float fog=clamp(1.-vDepth/16.,.15,1.);
+  o=vec4(col*fog*(.08+s*.25),1.);
+}`;
+
+/** compile builds a program with optional transform feedback varyings. */
+function compile(vs, fs, varyings) {
+  const p = gl.createProgram();
+  for (const [t, s] of [[gl.VERTEX_SHADER, vs], [gl.FRAGMENT_SHADER, fs]]) {
+    const sh = gl.createShader(t); gl.shaderSource(sh, s); gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    gl.attachShader(p, sh);
+  }
+  if (varyings) gl.transformFeedbackVaryings(p, varyings, gl.SEPARATE_ATTRIBS);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const updP = compile(updateVS, updateFS, ['vPos', 'vVel']);
+const drawP = compile(drawVS, drawFS);
+
+const pos0 = new Float32Array(N * 3), vel0 = new Float32Array(N * 3);
+for (let i = 0; i < N; i++) {
+  const r = Math.cbrt(Math.random()) * 3, th = Math.random() * Math.PI * 2, ph = Math.acos(2 * Math.random() - 1);
+  pos0[i * 3] = r * Math.sin(ph) * Math.cos(th); pos0[i * 3 + 1] = r * Math.sin(ph) * Math.sin(th); pos0[i * 3 + 2] = r * Math.cos(ph);
+}
+/** makeBuf creates a dynamic-copy buffer. */
+function makeBuf(data) { const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.DYNAMIC_COPY); return b; }
+const bufs = [{ pos: makeBuf(pos0), vel: makeBuf(vel0) }, { pos: makeBuf(pos0), vel: makeBuf(vel0) }];
+
+/** makeVAO wires pos/vel attributes for a program. */
+function makeVAO(prog, b) {
+  const vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+  const lp = gl.getAttribLocation(prog, 'aPos'), lv = gl.getAttribLocation(prog, 'aVel');
+  gl.bindBuffer(gl.ARRAY_BUFFER, b.pos); gl.enableVertexAttribArray(lp); gl.vertexAttribPointer(lp, 3, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ARRAY_BUFFER, b.vel); gl.enableVertexAttribArray(lv); gl.vertexAttribPointer(lv, 3, gl.FLOAT, false, 0, 0);
+  gl.bindVertexArray(null); return vao;
+}
+const updVAO = bufs.map(b => makeVAO(updP, b)), drawVAO = bufs.map(b => makeVAO(drawP, b));
+gl.bindBuffer(gl.ARRAY_BUFFER, null);
+const tfs = bufs.map(b => { const tf = gl.createTransformFeedback(); gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tf);
+  gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 0, b.pos); gl.bindBufferBase(gl.TRANSFORM_FEEDBACK_BUFFER, 1, b.vel);
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null); return tf; });
+
+const U = (p, n) => gl.getUniformLocation(p, n);
+const u = { dt: U(updP, 'uDt'), time: U(updP, 'uTime'), mouse: U(updP, 'uMouse'), repel: U(updP, 'uRepel'), proj: U(drawP, 'uProj'), view: U(drawP, 'uView'), px: U(drawP, 'uPx') };
+
+let rotX = 0.3, rotY = 0.4, zoom = 9, dragging = false, lx = 0, ly = 0, repel = 0;
+const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+canvas.addEventListener('pointerdown', e => { dragging = true; repel = 1; lx = e.clientX; ly = e.clientY; });
+addEventListener('pointerup', () => { dragging = false; repel = 0; });
+addEventListener('pointermove', e => {
+  mouse.tx = (e.clientX / innerWidth) * 2 - 1; mouse.ty = -((e.clientY / innerHeight) * 2 - 1);
+  if (dragging) { rotY += (e.clientX - lx) * 0.005; rotX += (e.clientY - ly) * 0.005; lx = e.clientX; ly = e.clientY; }
+});
+addEventListener('wheel', e => { zoom = Math.max(3, Math.min(20, zoom + e.deltaY * 0.01)); });
+
+/** perspective builds a column-major projection matrix. */
+function perspective(fov, asp, n, f) { const t = 1 / Math.tan(fov / 2); return new Float32Array([t / asp, 0, 0, 0, 0, t, 0, 0, 0, 0, (f + n) / (n - f), -1, 0, 0, 2 * f * n / (n - f), 0]); }
+/** view builds an orbit camera matrix. */
+function view(rx, ry, d) {
+  const cx = Math.cos(rx), sx = Math.sin(rx), cy = Math.cos(ry), sy = Math.sin(ry);
+  return new Float32Array([cy, sx * sy, -cx * sy, 0, 0, cx, sx, 0, sy, -sx * cy, cx * cy, 0, 0, 0, -d, 1]);
+}
+
+/** resize matches the drawing buffer to the window. */
+function resize() { const d = Math.min(devicePixelRatio, 2); canvas.width = innerWidth * d; canvas.height = innerHeight * d; gl.viewport(0, 0, canvas.width, canvas.height); }
+addEventListener('resize', resize); resize();
+
+let cur = 0, last = performance.now(), frames = 0, fpsT = 0;
+const fpsEl = document.getElementById('fps');
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now;
+  frames++; fpsT += dt; if (fpsT > 0.5) { fpsEl.textContent = Math.round(frames / fpsT) + ' fps'; frames = 0; fpsT = 0; }
+  mouse.x += (mouse.tx - mouse.x) * 0.1; mouse.y += (mouse.ty - mouse.y) * 0.1;
+
+  const asp = canvas.width / canvas.height;
+  const cx = Math.cos(rotX), sx = Math.sin(rotX), cy = Math.cos(rotY), sy = Math.sin(rotY);
+  const mx = mouse.x * 4 * asp, my = mouse.y * 4;
+  const wx = mx * cy + my * sx * sy, wy = my * cx, wz = -mx * sy + my * sx * cy;
+
+  const nxt = 1 - cur;
+  gl.useProgram(updP);
+  gl.uniform1f(u.dt, dt); gl.uniform1f(u.time, now / 1000); gl.uniform3f(u.mouse, wx, wy, wz); gl.uniform1f(u.repel, repel);
+  gl.bindVertexArray(updVAO[cur]);
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, tfs[nxt]);
+  gl.enable(gl.RASTERIZER_DISCARD);
+  gl.beginTransformFeedback(gl.POINTS); gl.drawArrays(gl.POINTS, 0, N); gl.endTransformFeedback();
+  gl.disable(gl.RASTERIZER_DISCARD);
+  gl.bindTransformFeedback(gl.TRANSFORM_FEEDBACK, null);
+
+  gl.clearColor(0.027, 0.031, 0.047, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+  gl.useProgram(drawP);
+  gl.uniformMatrix4fv(u.proj, false, perspective(1.0, asp, 0.1, 100));
+  gl.uniformMatrix4fv(u.view, false, view(rotX, rotY, zoom));
+  gl.uniform1f(u.px, canvas.height / 400);
+  gl.bindVertexArray(drawVAO[nxt]);
+  gl.drawArrays(gl.POINTS, 0, N);
+  gl.bindVertexArray(null);
+
+  cur = nxt;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

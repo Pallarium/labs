@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KALEIDODRIFT — WebGL Shader</title>
+<style>
+:root{ --bg:#151012; --surface:#241d20; --ink:#ece9ea; --muted:#9b848d; --hairline:#3a2d32; --accent:#7ee53b; --accent-2:#4b89e7; --warn:#f5be3d; --error:#ec5651; }
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+  font-family:'Figtree','Segoe UI',system-ui,sans-serif;}
+canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:crosshair}
+
+.hero{position:fixed;top:22px;left:26px;z-index:5;pointer-events:none}
+.hero h1{font-family:'Oswald','Segoe UI',sans-serif;font-weight:700;letter-spacing:.14em;
+  font-size:34px;line-height:1;text-transform:uppercase;
+  text-shadow:6px 6px 0 var(--bg);}
+.hero h1 span{color:var(--accent)}
+.hero p{font-size:12px;color:var(--muted);letter-spacing:.25em;text-transform:uppercase;margin-top:8px}
+
+/* control pod — pill, hard offset shadow, no border, tight spacing */
+.pod{position:fixed;right:22px;bottom:22px;z-index:6;width:290px;
+  background:var(--surface);border-radius:26px;padding:18px 20px 20px;
+  box-shadow:6px 6px 0 var(--ink);}
+.pod h2{font-family:'Oswald','Segoe UI',sans-serif;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;font-size:13px;color:var(--muted);margin-bottom:14px;
+  display:flex;align-items:center;gap:8px}
+.pod h2 b{color:var(--accent);font-weight:700}
+
+.row{margin-bottom:14px}
+.row label{display:flex;justify-content:space-between;align-items:center;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+.row label var{color:var(--ink);font-style:normal;font-variant-numeric:tabular-nums;
+  font-family:'Oswald','Segoe UI',sans-serif;letter-spacing:.05em}
+
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:6px;
+  background:var(--hairline);border-radius:999px;outline:none;transition:background .15s ease}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+  width:18px;height:18px;border-radius:999px;background:var(--accent);cursor:pointer;
+  box-shadow:2px 2px 0 var(--bg);transition:transform .15s ease}
+input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.15)}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:999px;
+  background:var(--accent);cursor:pointer;box-shadow:2px 2px 0 var(--bg)}
+
+.pal-row{display:flex;gap:8px;margin-bottom:16px}
+.pal{flex:1;height:26px;border-radius:999px;cursor:pointer;opacity:.5;
+  box-shadow:3px 3px 0 var(--bg);transition:opacity .15s ease,transform .15s ease}
+.pal:hover{transform:translateY(-2px)}
+.pal.on{opacity:1}
+.pal.p0{background:linear-gradient(90deg,var(--accent),var(--accent-2))}
+.pal.p1{background:linear-gradient(90deg,var(--warn),var(--error))}
+.pal.p2{background:linear-gradient(90deg,var(--accent-2),var(--ink))}
+.pal.p3{background:linear-gradient(90deg,var(--error),var(--accent))}
+
+.btns{display:flex;gap:10px}
+button{flex:1;font-family:'Oswald','Segoe UI',sans-serif;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;font-size:12px;padding:11px 0;border:none;border-radius:999px;
+  cursor:pointer;background:var(--accent);color:var(--bg);box-shadow:4px 4px 0 var(--ink);
+  transition:transform .15s ease,box-shadow .15s ease}
+button.ghost{background:var(--surface);color:var(--ink);box-shadow:4px 4px 0 var(--ink)}
+button:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--ink)}
+button:active{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--ink)}
+
+.hint{position:fixed;left:26px;bottom:24px;z-index:5;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);pointer-events:none}
+.hint b{color:var(--accent-2)}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="hero">
+  <h1>KALEIDO<span>DRIFT</span></h1>
+  <p>domain-warped &middot; mouse-reactive</p>
+</div>
+
+<div class="hint">→ move the mouse to steer the warp &nbsp;&bull;&nbsp; <b>P</b> = preset &nbsp;&bull;&nbsp; <b>H</b> = hide panel</div>
+
+<div class="pod" id="pod">
+  <h2><b>&#9654;</b> Controls</h2>
+
+  <div class="row">
+    <label>Speed <var id="vSpeed">1.00</var></label>
+    <input type="range" id="speed" min="0" max="3" step="0.01" value="1">
+  </div>
+  <div class="row">
+    <label>Zoom <var id="vZoom">1.00</var></label>
+    <input type="range" id="zoom" min="0.4" max="4" step="0.01" value="1">
+  </div>
+  <div class="row">
+    <label>Segments <var id="vSeg">8</var></label>
+    <input type="range" id="seg" min="2" max="16" step="1" value="8">
+  </div>
+  <div class="row">
+    <label>Warp <var id="vWarp">1.00</var></label>
+    <input type="range" id="warp" min="0" max="3" step="0.01" value="1">
+  </div>
+
+  <label style="font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;display:block">Palette</label>
+  <div class="pal-row" id="palRow">
+    <div class="pal p0 on" data-p="0"></div>
+    <div class="pal p1" data-p="1"></div>
+    <div class="pal p2" data-p="2"></div>
+    <div class="pal p3" data-p="3"></div>
+  </div>
+
+  <div class="btns">
+    <button id="preset">&#8635; Preset</button>
+    <button class="ghost" id="reset">&#215; Reset</button>
+  </div>
+</div>
+
+<script type="x-shader/x-fragment" id="frag">#version 300 es
+precision highp float;
+out vec4 outColor;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform float uSpeed;
+uniform float uZoom;
+uniform float uSeg;
+uniform float uWarp;
+uniform int   uPalette;
+uniform vec2  uMouse;    // 0..1
+uniform float uMouseAmt; // eased strength
+
+#define PI 3.14159265359
+#define TAU 6.28318530718
+
+// hash / value-noise
+float hash(vec2 p){
+  p = fract(p*vec2(123.34,456.21));
+  p += dot(p, p+45.32);
+  return fract(p.x*p.y);
+}
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i+vec2(0,0)),hash(i+vec2(1,0)),u.x),
+             mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),u.x),u.y);
+}
+float fbm(vec2 p){
+  float v=0.0, a=0.5;
+  mat2 m = mat2(1.6,1.2,-1.2,1.6);
+  for(int i=0;i<5;i++){ v += a*noise(p); p = m*p; a*=0.5; }
+  return v;
+}
+
+// iq cosine palette
+vec3 pal(float t, vec3 a, vec3 b, vec3 c, vec3 d){
+  return a + b*cos(TAU*(c*t+d));
+}
+vec3 palette(float t){
+  if(uPalette==0) // accent green -> electric blue  (triadic)
+    return pal(t, vec3(0.5,0.45,0.42), vec3(0.5,0.5,0.5),
+                  vec3(1.0,1.0,1.0), vec3(0.30,0.55,0.80));
+  if(uPalette==1) // warn amber -> error red (warm)
+    return pal(t, vec3(0.55,0.35,0.25), vec3(0.45,0.35,0.30),
+                  vec3(1.0,1.0,0.6), vec3(0.05,0.15,0.25));
+  if(uPalette==2) // blue -> ink (cool cyan)
+    return pal(t, vec3(0.40,0.45,0.55), vec3(0.35,0.40,0.50),
+                  vec3(1.0,1.0,1.0), vec3(0.55,0.60,0.70));
+  // 3: red -> green (contrasty triad)
+  return pal(t, vec3(0.5,0.5,0.5), vec3(0.5,0.5,0.5),
+                vec3(1.0,0.9,1.0), vec3(0.00,0.33,0.67));
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - 0.5*uRes) / uRes.y;
+
+  float t = uTime * uSpeed;
+
+  // mouse-driven offset & rotation
+  vec2 m = (uMouse - 0.5);
+  uv += m * 0.55 * uMouseAmt;
+
+  // kaleidoscope fold
+  float ang = atan(uv.y, uv.x);
+  float rad = length(uv);
+  float seg = uSeg;
+  ang = mod(ang, TAU/seg);
+  ang = abs(ang - PI/seg);
+  // slow global spin, nudged by mouse x
+  ang += t*0.05 + m.x*0.6*uMouseAmt;
+  vec2 p = vec2(cos(ang), sin(ang)) * rad;
+
+  p *= uZoom * 2.2;
+
+  // domain warp
+  float wk = uWarp * (1.0 + uMouseAmt*0.8);
+  vec2 q = vec2( fbm(p + vec2(0.0,0.0) + t*0.15),
+                 fbm(p + vec2(5.2,1.3) - t*0.10) );
+  vec2 r = vec2( fbm(p + wk*q + vec2(1.7,9.2) + t*0.12),
+                 fbm(p + wk*q + vec2(8.3,2.8) - t*0.09) );
+  float f = fbm(p + wk*r);
+
+  // color from the warped field
+  float tone = f + 0.35*length(r) - rad*0.25 + t*0.03;
+  vec3 col = palette(tone);
+
+  // neon veins on black: lit where the field is high, dark valleys between
+  float veins = smoothstep(0.28, 0.62, f);
+  col *= veins * 2.0;
+  // glowing filaments along the fastest-changing bands, layered across the field
+  float edge = pow(abs(fract(f*4.0)-0.5)*2.0, 5.0);
+  col += palette(tone+0.5) * edge * 2.0 * (0.4 + veins);
+
+  // crank saturation for neon
+  float lum = dot(col, vec3(0.299,0.587,0.114));
+  col = mix(vec3(lum), col, 1.8);
+  col *= 1.5; // overdrive into HDR so the lit veins bloom
+
+  // vignette fades the lit veins to true black at the edges
+  float vig = smoothstep(1.5, 0.2, rad);
+  col *= vig;
+
+  // mouse hotspot glow
+  col += vec3(0.20,0.30,0.12) * uMouseAmt * smoothstep(0.5,0.0, length(uv - m));
+
+  outColor = vec4(max(col,0.0), 1.0); // HDR, no clamp — bloom pass tonemaps
+}
+</script>
+
+<!-- bright extract: keep only what glows -->
+<script type="x-shader/x-fragment" id="fragBright">#version 300 es
+precision highp float;
+out vec4 o; uniform sampler2D uTex; uniform vec2 uRes; uniform float uThresh;
+void main(){
+  vec3 c = texture(uTex, gl_FragCoord.xy/uRes).rgb;
+  float b = max(c.r,max(c.g,c.b));
+  float k = smoothstep(uThresh, uThresh+0.6, b);
+  o = vec4(c*k, 1.0);
+}
+</script>
+
+<!-- separable gaussian blur -->
+<script type="x-shader/x-fragment" id="fragBlur">#version 300 es
+precision highp float;
+out vec4 o; uniform sampler2D uTex; uniform vec2 uRes; uniform vec2 uDir;
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec2 px = uDir/uRes;
+  float w[5]; w[0]=0.227027; w[1]=0.1945946; w[2]=0.1216216; w[3]=0.054054; w[4]=0.016216;
+  vec3 c = texture(uTex, uv).rgb * w[0];
+  for(int i=1;i<5;i++){
+    c += texture(uTex, uv + px*float(i)).rgb * w[i];
+    c += texture(uTex, uv - px*float(i)).rgb * w[i];
+  }
+  o = vec4(c,1.0);
+}
+</script>
+
+<!-- composite: scene + bloom, ACES tonemap -->
+<script type="x-shader/x-fragment" id="fragComp">#version 300 es
+precision highp float;
+out vec4 o; uniform sampler2D uScene; uniform sampler2D uBloom;
+uniform vec2 uRes; uniform float uBloomAmt;
+vec3 aces(vec3 x){ return clamp((x*(2.51*x+0.03))/(x*(2.43*x+0.59)+0.14),0.0,1.0); }
+void main(){
+  vec2 uv = gl_FragCoord.xy/uRes;
+  vec3 s = texture(uScene, uv).rgb;
+  vec3 b = texture(uBloom, uv).rgb;
+  vec3 col = s + b*uBloomAmt;
+  col = aces(col);
+  col = pow(col, vec3(0.9)); // slight lift
+  o = vec4(col,1.0);
+}
+</script>
+
+<script>
+const canvas = document.getElementById('gl');
+const gl = canvas.getContext('webgl2', {antialias:false, alpha:false});
+if(!gl){ document.body.innerHTML = '<p style="padding:40px;font-family:sans-serif;color:#ece9ea">WebGL2 not available in this browser.</p>'; }
+
+// float render targets for HDR bloom
+const hasFloat = gl.getExtension('EXT_color_buffer_float');
+const TEX_TYPE = hasFloat ? gl.FLOAT : gl.UNSIGNED_BYTE;
+const TEX_FMT  = hasFloat ? gl.RGBA16F : gl.RGBA;
+
+const vsrc = `#version 300 es
+in vec2 pos; void main(){ gl_Position = vec4(pos,0.0,1.0); }`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+function program(fragId){
+  const p = gl.createProgram();
+  gl.attachShader(p, compile(gl.VERTEX_SHADER, vsrc));
+  gl.attachShader(p, compile(gl.FRAGMENT_SHADER, document.getElementById(fragId).textContent));
+  gl.linkProgram(p);
+  if(!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+  return p;
+}
+const progScene  = program('frag');
+const progBright = program('fragBright');
+const progBlur   = program('fragBlur');
+const progComp   = program('fragComp');
+
+// fullscreen triangle, shared across all programs
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+function bindPos(p){
+  const loc = gl.getAttribLocation(p,'pos');
+  gl.enableVertexAttribArray(loc);
+  gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+}
+
+const U = {};
+['uRes','uTime','uSpeed','uZoom','uSeg','uWarp','uPalette','uMouse','uMouseAmt']
+  .forEach(n => U[n] = gl.getUniformLocation(progScene, n));
+
+// ---- framebuffers ----
+function makeTarget(w,h){
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D,0,TEX_FMT,w,h,0,gl.RGBA,TEX_TYPE,null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+  return {tex, fbo, w, h};
+}
+let sceneT, brightT, pingT, pongT;
+let BW=1, BH=1; // bloom (half-res) dimensions
+function makeTargets(){
+  [sceneT,brightT,pingT,pongT].forEach(t=>{ if(t){ gl.deleteTexture(t.tex); gl.deleteFramebuffer(t.fbo);} });
+  const W = canvas.width, H = canvas.height;
+  BW = Math.max(1, W>>1); BH = Math.max(1, H>>1);
+  sceneT  = makeTarget(W,H);
+  brightT = makeTarget(BW,BH);
+  pingT   = makeTarget(BW,BH);
+  pongT   = makeTarget(BW,BH);
+}
+
+// ---- state ----
+const state = { speed:1, zoom:1, seg:8, warp:1, palette:0 };
+let mouse = {x:0.5, y:0.5}, mouseAmt = 0, mouseTarget = 0;
+
+function resize(){
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  canvas.width  = Math.floor(innerWidth*dpr);
+  canvas.height = Math.floor(innerHeight*dpr);
+  makeTargets();
+}
+addEventListener('resize', resize); resize();
+
+addEventListener('pointermove', e=>{
+  mouse.x = e.clientX/innerWidth;
+  mouse.y = 1 - e.clientY/innerHeight;
+  mouseTarget = 1;
+  clearTimeout(mouse._t);
+  mouse._t = setTimeout(()=> mouseTarget = 0, 900);
+});
+
+// ---- controls ----
+function bind(id, key, disp, fmt){
+  const el = document.getElementById(id);
+  const out = document.getElementById(disp);
+  el.addEventListener('input', ()=>{ state[key] = parseFloat(el.value); out.textContent = fmt(state[key]); });
+}
+bind('speed','speed','vSpeed', v=>v.toFixed(2));
+bind('zoom','zoom','vZoom', v=>v.toFixed(2));
+bind('seg','seg','vSeg', v=>String(v|0));
+bind('warp','warp','vWarp', v=>v.toFixed(2));
+
+document.getElementById('palRow').addEventListener('click', e=>{
+  const el = e.target.closest('.pal'); if(!el) return;
+  state.palette = +el.dataset.p;
+  document.querySelectorAll('.pal').forEach(p=>p.classList.toggle('on', p===el));
+});
+
+function syncUI(){
+  speed.value=state.speed; zoom.value=state.zoom; seg.value=state.seg; warp.value=state.warp;
+  vSpeed.textContent=state.speed.toFixed(2); vZoom.textContent=state.zoom.toFixed(2);
+  vSeg.textContent=String(state.seg|0); vWarp.textContent=state.warp.toFixed(2);
+  document.querySelectorAll('.pal').forEach(p=>p.classList.toggle('on', +p.dataset.p===state.palette));
+}
+const speed=document.getElementById('speed'), zoom=document.getElementById('zoom'),
+      seg=document.getElementById('seg'), warp=document.getElementById('warp');
+
+const rnd=(a,b)=>a+Math.random()*(b-a);
+document.getElementById('preset').addEventListener('click', ()=>{
+  state.speed = +rnd(0.4,2.2).toFixed(2);
+  state.zoom  = +rnd(0.6,3.0).toFixed(2);
+  state.seg   = 2*Math.round(rnd(2,8));      // even segments look cleanest
+  state.warp  = +rnd(0.6,2.6).toFixed(2);
+  state.palette = Math.floor(Math.random()*4);
+  syncUI();
+});
+document.getElementById('reset').addEventListener('click', ()=>{
+  Object.assign(state,{speed:1,zoom:1,seg:8,warp:1,palette:0}); syncUI();
+});
+
+addEventListener('keydown', e=>{
+  if(e.key==='p'||e.key==='P') document.getElementById('preset').click();
+  if(e.key==='h'||e.key==='H') document.getElementById('pod').style.display =
+    (document.getElementById('pod').style.display==='none') ? 'block':'none';
+});
+
+// uniform locations for the post programs
+const Ub = {
+  bright:{ tex:gl.getUniformLocation(progBright,'uTex'), res:gl.getUniformLocation(progBright,'uRes'), thresh:gl.getUniformLocation(progBright,'uThresh') },
+  blur:{   tex:gl.getUniformLocation(progBlur,'uTex'),   res:gl.getUniformLocation(progBlur,'uRes'),   dir:gl.getUniformLocation(progBlur,'uDir') },
+  comp:{   scene:gl.getUniformLocation(progComp,'uScene'), bloom:gl.getUniformLocation(progComp,'uBloom'), res:gl.getUniformLocation(progComp,'uRes'), amt:gl.getUniformLocation(progComp,'uBloomAmt') }
+};
+
+function pass(prog, target){ // target null = screen
+  gl.useProgram(prog);
+  bindPos(prog);
+  if(target){ gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo); gl.viewport(0,0,target.w,target.h); }
+  else { gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0,0,canvas.width,canvas.height); }
+}
+
+// ---- render loop ----
+const start = performance.now();
+function frame(now){
+  const t = (now - start)/1000;
+  mouseAmt += (mouseTarget - mouseAmt)*0.06;
+
+  // 1) scene -> sceneT (HDR)
+  pass(progScene, sceneT);
+  gl.uniform2f(U.uRes, sceneT.w, sceneT.h);
+  gl.uniform1f(U.uTime, t);
+  gl.uniform1f(U.uSpeed, state.speed);
+  gl.uniform1f(U.uZoom, state.zoom);
+  gl.uniform1f(U.uSeg, state.seg);
+  gl.uniform1f(U.uWarp, state.warp);
+  gl.uniform1i(U.uPalette, state.palette);
+  gl.uniform2f(U.uMouse, mouse.x, mouse.y);
+  gl.uniform1f(U.uMouseAmt, mouseAmt);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // 2) bright extract -> brightT (half-res)
+  pass(progBright, brightT);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
+  gl.uniform1i(Ub.bright.tex, 0);
+  gl.uniform2f(Ub.bright.res, brightT.w, brightT.h);
+  gl.uniform1f(Ub.bright.thresh, 0.85);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  // 3) separable gaussian, ping-pong (a few octaves for a wide soft glow)
+  let src = brightT;
+  const dirs = [[1,0],[0,1],[2,0],[0,2],[3,0],[0,3]];
+  for(let i=0;i<dirs.length;i++){
+    const dst = (i%2===0)? pingT : pongT;
+    pass(progBlur, dst);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
+    gl.uniform1i(Ub.blur.tex, 0);
+    gl.uniform2f(Ub.blur.res, dst.w, dst.h);
+    gl.uniform2f(Ub.blur.dir, dirs[i][0], dirs[i][1]);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    src = dst;
+  }
+
+  // 4) composite scene + bloom -> screen
+  pass(progComp, null);
+  gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
+  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, src.tex);
+  gl.uniform1i(Ub.comp.scene, 0);
+  gl.uniform1i(Ub.comp.bloom, 1);
+  gl.uniform2f(Ub.comp.res, canvas.width, canvas.height);
+  gl.uniform1f(Ub.comp.amt, 0.7);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

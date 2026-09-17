@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>stylized water</title>
+<style>
+  :root{
+    --bg:#05070c; --panel:#0c0f17; --line:#1a2030;
+    --neon:#39ffb0; --txt:#cfd6e4; --dim:#5d6780;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);
+       font:13px/1.5 ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+       display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+  .wrap{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  .stage{position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;
+         box-shadow:0 24px 70px -24px #000}
+  canvas{display:block;background:#04121e;cursor:crosshair}
+  .tag{position:absolute;top:10px;left:12px;font-size:11px;letter-spacing:.14em;
+       text-transform:uppercase;color:rgba(255,255,255,.55);text-shadow:0 1px 4px #000}
+  .fps{position:absolute;top:10px;right:12px;font-size:11px;color:var(--neon);
+       opacity:.85;text-shadow:0 1px 4px #000}
+  .panel{width:244px;background:var(--panel);border:1px solid var(--line);
+         border-radius:10px;padding:16px}
+  h1{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--neon);margin-bottom:4px}
+  .sub{font-size:11px;color:var(--dim);margin-bottom:14px;line-height:1.6}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;
+       border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:none}
+  .row label{font-size:12px}
+  .row .v{font-size:11px;color:var(--dim);min-width:44px;text-align:right}
+  input[type=range]{-webkit-appearance:none;width:100%;height:3px;background:var(--line);
+                    border-radius:2px;outline:none;margin:2px 0 6px}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;
+      border-radius:50%;background:var(--neon);cursor:pointer;box-shadow:0 0 8px var(--neon)}
+  .sw{position:relative;width:34px;height:18px;border-radius:9px;background:#191d2b;
+      border:1px solid var(--line);cursor:pointer;transition:background .15s}
+  .sw::after{content:"";position:absolute;top:2px;left:2px;width:12px;height:12px;
+      border-radius:50%;background:var(--dim);transition:.15s}
+  .sw.on{background:rgba(57,255,176,.14);border-color:var(--neon)}
+  .sw.on::after{left:18px;background:var(--neon);box-shadow:0 0 8px var(--neon)}
+  .hint{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
+        font-size:11px;color:var(--dim);line-height:1.7}
+  kbd{background:#161a26;border:1px solid var(--line);border-radius:3px;padding:1px 5px;
+      font:inherit;font-size:10px;color:var(--txt)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <canvas id="c" width="372" height="252" style="width:620px;height:420px"></canvas>
+    <div class="tag">stylized water</div>
+    <div class="fps" id="fps">60</div>
+  </div>
+
+  <div class="panel">
+    <h1>water</h1>
+    <div class="sub">click the surface to drop a ripple. every layer is a toggle, so you can see what each one is actually doing.</div>
+
+    <div class="row"><label>wave height</label><span class="v" id="v1">0.55</span></div>
+    <input type="range" id="r1" min="0" max="1.4" step="0.01" value="0.55">
+
+    <div class="row"><label>foam width</label><span class="v" id="v2">0.34</span></div>
+    <input type="range" id="r2" min="0" max="1" step="0.01" value="0.34">
+
+    <div class="row"><label>flow speed</label><span class="v" id="v3">1.00</span></div>
+    <input type="range" id="r3" min="0" max="3" step="0.02" value="1">
+
+    <div class="row"><label>caustics</label><div class="sw on" id="s1"></div></div>
+    <div class="row"><label>foam lines</label><div class="sw on" id="s2"></div></div>
+    <div class="row"><label>specular</label><div class="sw on" id="s3"></div></div>
+    <div class="row"><label>depth fade</label><div class="sw on" id="s4"></div></div>
+
+    <div class="hint">
+      <kbd>click</kbd> ripple &nbsp; <kbd>1</kbd>..<kbd>4</kbd> layers<br>
+      real gerstner waves, no textures
+    </div>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('c');
+const gl = cv.getContext('webgl');
+
+const VS = `
+attribute vec2 p;
+void main(){ gl_Position = vec4(p, 0.0, 1.0); }
+`;
+
+const FS = `
+precision highp float;
+uniform vec2  res;
+uniform float time;
+uniform float waveH;
+uniform float foamW;
+uniform float flow;
+uniform float fCaustic, fFoam, fSpec, fDepth;
+uniform vec3  rip[8];      // x, y, birth time
+
+// cheap hash noise
+float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
+float noise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  f = f*f*(3.0-2.0*f);
+  return mix(mix(hash(i), hash(i+vec2(1,0)), f.x),
+             mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+}
+float fbm(vec2 p){
+  float v = 0.0, a = 0.5;
+  for (int i=0;i<3;i++){ v += a*noise(p); p *= 2.02; a *= 0.5; }
+  return v;
+}
+
+// gerstner-ish directional wave stack
+float waves(vec2 uv, float t){
+  float h = 0.0;
+  h += sin(uv.x*3.1 + t*1.10) * 0.50;
+  h += sin(uv.y*2.3 - t*0.85) * 0.35;
+  h += sin((uv.x+uv.y)*4.7 + t*1.70) * 0.22;
+  h += sin((uv.x-uv.y*0.6)*7.3 - t*2.10) * 0.12;
+  h += sin(uv.x*11.0 + uv.y*8.0 + t*2.6) * 0.07;
+  return h;
+}
+
+void main(){
+  vec2 uv = gl_FragCoord.xy / res;
+  vec2 P  = uv * vec2(res.x/res.y, 1.0) * 3.4;
+  float t = time * flow;
+
+  // perspective: push the far plane up
+  float horizon = 0.56;
+  if (uv.y > horizon){
+    // sky gradient above the waterline
+    float s = (uv.y - horizon) / (1.0 - horizon);
+    vec3 sky = mix(vec3(0.16,0.34,0.48), vec3(0.04,0.09,0.17), s);
+    sky += vec3(0.9,0.85,0.7) * pow(max(0.0, 1.0-abs(uv.x-0.72)*3.4), 8.0) * (1.0-s) * 0.5;
+    gl_FragColor = vec4(sky, 1.0);
+    return;
+  }
+
+  // fake perspective stretch toward the horizon
+  float d = (horizon - uv.y) / horizon;          // 0 at horizon, 1 at bottom
+  float persp = 1.0 / max(d, 0.06);
+  vec2 wp = vec2(P.x * persp * 0.34, persp * 0.9 + t * 0.30);
+
+  float h = waves(wp, t);
+
+  // interactive ripples
+  float ripple = 0.0;
+  for (int i=0;i<8;i++){
+    if (rip[i].z < 0.0) continue;
+    float age = time - rip[i].z;
+    if (age > 2.6) continue;
+    vec2 rp = rip[i].xy;
+    float dist = distance(uv, rp);
+    float ring = sin(dist*46.0 - age*9.0);
+    float env  = exp(-dist*7.0) * exp(-age*1.5) * smoothstep(0.0, 0.14, age);
+    ripple += ring * env * 0.55;
+  }
+  h += ripple;
+  h *= waveH;
+
+  // normal from height slope
+  float e = 0.012;
+  float hx = waves(wp + vec2(e,0.0), t)*waveH - h;
+  float hy = waves(wp + vec2(0.0,e), t)*waveH - h;
+  vec3 N = normalize(vec3(-hx*3.0, -hy*3.0, 1.0));
+
+  // base water color, deeper toward the bottom
+  vec3 deep    = vec3(0.016, 0.115, 0.230);
+  vec3 shallow = vec3(0.118, 0.560, 0.610);
+  float depthMix = fDepth > 0.5 ? smoothstep(0.0, 0.62, d) : 0.45;
+  vec3 col = mix(shallow, deep, depthMix);
+
+  // caustic web under the surface
+  if (fCaustic > 0.5){
+    vec2 cp = wp*1.5 + N.xy*1.4;
+    float ca = fbm(cp + vec2(t*0.5, t*0.31));
+    float cb = fbm(cp*1.7 - vec2(t*0.37, t*0.44));
+    float caus = pow(1.0 - abs(ca - cb)*2.2, 6.0);
+    col += vec3(0.35, 0.85, 0.80) * caus * 0.55 * (1.0 - depthMix*0.7);
+  }
+
+  // foam: crest lines where the height peaks, plus ripple crests
+  if (fFoam > 0.5){
+    float crest = smoothstep(0.62 - foamW*0.5, 0.92, h + 0.5);
+    float lace  = fbm(wp*6.0 + vec2(t*0.9, t*0.4));
+    float foam  = crest * smoothstep(0.42, 0.72, lace);
+    foam += smoothstep(0.35, 0.95, abs(ripple)*2.4) * 0.7;
+    col = mix(col, vec3(0.92, 0.97, 1.0), clamp(foam, 0.0, 1.0) * 0.85);
+  }
+
+  // specular sun glint
+  if (fSpec > 0.5){
+    vec3 L = normalize(vec3(0.45, 0.35, 0.82));
+    vec3 V = vec3(0.0, 0.0, 1.0);
+    vec3 Hv = normalize(L + V);
+    float spec = pow(max(dot(N, Hv), 0.0), 120.0);
+    col += vec3(1.0, 0.96, 0.84) * spec * 1.8;
+
+    // broad sun road down the middle right
+    float road = pow(max(0.0, 1.0 - abs(uv.x - 0.72) * 3.0), 3.0);
+    col += vec3(1.0, 0.92, 0.72) * road * pow(max(h,0.0), 2.0) * 0.5 * (1.0-d*0.6);
+  }
+
+  // horizon haze
+  col = mix(col, vec3(0.13,0.28,0.40), pow(1.0 - d, 3.5) * 0.85);
+
+  // subtle vignette
+  vec2 q = uv - 0.5;
+  col *= 1.0 - dot(q,q) * 0.55;
+
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
+
+function sh(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS));
+gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+gl.linkProgram(prog);
+gl.useProgram(prog);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+const loc = gl.getAttribLocation(prog, 'p');
+gl.enableVertexAttribArray(loc);
+gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+
+const U = n => gl.getUniformLocation(prog, n);
+const uRes=U('res'), uTime=U('time'), uWave=U('waveH'), uFoam=U('foamW'), uFlow=U('flow');
+const uC=U('fCaustic'), uF=U('fFoam'), uS=U('fSpec'), uD=U('fDepth'), uRip=U('rip');
+
+let waveH = 0.55, foamW = 0.34, flow = 1.0;
+const L = { caustic:true, foam:true, spec:true, depth:true };
+const ripples = new Float32Array(24);
+for (let i=0;i<8;i++) ripples[i*3+2] = -1;
+let ripIdx = 0;
+
+const t0 = performance.now();
+let frames = 0, acc = 0, lastF = t0;
+
+function frame(now){
+  const time = (now - t0) / 1000;
+  frames++; acc += now - lastF; lastF = now;
+  if (acc > 400){
+    document.getElementById('fps').textContent = Math.round(1000/(acc/frames));
+    frames = 0; acc = 0;
+  }
+
+  gl.viewport(0,0,cv.width,cv.height);
+  gl.uniform2f(uRes, cv.width, cv.height);
+  gl.uniform1f(uTime, time);
+  gl.uniform1f(uWave, waveH);
+  gl.uniform1f(uFoam, foamW);
+  gl.uniform1f(uFlow, flow);
+  gl.uniform1f(uC, L.caustic?1:0);
+  gl.uniform1f(uF, L.foam?1:0);
+  gl.uniform1f(uS, L.spec?1:0);
+  gl.uniform1f(uD, L.depth?1:0);
+  gl.uniform3fv(uRip, ripples);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+cv.addEventListener('click', ev => {
+  const r = cv.getBoundingClientRect();
+  const ux = (ev.clientX - r.left) / r.width;
+  const uy = 1 - (ev.clientY - r.top) / r.height;
+  ripples[ripIdx*3+0] = ux;
+  ripples[ripIdx*3+1] = uy;
+  ripples[ripIdx*3+2] = (performance.now() - t0)/1000;
+  ripIdx = (ripIdx + 1) % 8;
+});
+
+const bind = (rid, vid, set, fmt) => {
+  const el = document.getElementById(rid);
+  el.addEventListener('input', () => {
+    set(+el.value);
+    document.getElementById(vid).textContent = fmt(+el.value);
+  });
+};
+bind('r1','v1', v => waveH = v, v => v.toFixed(2));
+bind('r2','v2', v => foamW = v, v => v.toFixed(2));
+bind('r3','v3', v => flow  = v, v => v.toFixed(2));
+
+const SW = { s1:'caustic', s2:'foam', s3:'spec', s4:'depth' };
+for (const id in SW){
+  document.getElementById(id).addEventListener('click', function(){
+    L[SW[id]] = !L[SW[id]];
+    this.classList.toggle('on', L[SW[id]]);
+  });
+}
+addEventListener('keydown', e => {
+  const m = {Digit1:'s1',Digit2:'s2',Digit3:'s3',Digit4:'s4'};
+  if (m[e.code]) document.getElementById(m[e.code]).click();
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pallarium Labs — 15 live web demos</title>
+<meta name="description" content="Fifteen self-contained canvas and WebGL demos built by Pallarium. No build step, no dependencies, view source on any of them.">
+<meta property="og:title" content="Pallarium Labs">
+<meta property="og:description" content="Fifteen live canvas and WebGL demos. Single file each. View source on any of them.">
+<meta property="og:type" content="website">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#07080c;--panel:#0d0f16;--line:#1b1f2e;
+  --txt:#e8ecf6;--dim:#7c869e;
+  --neon:#4de2ff;--neon2:#b77bff;--neon3:#3dffa8;
+}
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);color:var(--txt);
+  font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,sans-serif;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+a{color:inherit;text-decoration:none}
+
+/* ambient glow */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(60vw 45vh at 12% -5%, rgba(77,226,255,.13), transparent 62%),
+    radial-gradient(55vw 40vh at 92% 6%, rgba(183,123,255,.12), transparent 60%),
+    radial-gradient(70vw 50vh at 50% 108%, rgba(61,255,168,.07), transparent 60%);
+}
+.wrap{position:relative;z-index:1;max-width:1240px;margin:0 auto;padding:0 28px}
+
+/* header */
+header{padding:96px 0 52px;text-align:center}
+.tag{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:7px 16px;border:1px solid var(--line);border-radius:100px;
+  background:rgba(255,255,255,.02);
+  font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);
+  margin-bottom:26px;
+}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--neon3);
+  box-shadow:0 0 12px var(--neon3);animation:pulse 2.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+h1{
+  font-size:clamp(46px,8.5vw,96px);line-height:.94;letter-spacing:-.045em;
+  font-weight:800;margin-bottom:22px;
+  background:linear-gradient(135deg,#fff 12%,var(--neon) 52%,var(--neon2) 88%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+.sub{max-width:620px;margin:0 auto 34px;color:var(--dim);font-size:17px}
+.sub b{color:var(--txt);font-weight:600}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.btn{
+  padding:12px 24px;border-radius:11px;font-size:14px;font-weight:600;
+  border:1px solid var(--line);background:rgba(255,255,255,.03);
+  transition:.2s;display:inline-flex;align-items:center;gap:9px;
+}
+.btn:hover{border-color:var(--neon);color:var(--neon);
+  box-shadow:0 0 28px rgba(77,226,255,.16);transform:translateY(-2px)}
+.btn.solid{background:linear-gradient(135deg,var(--neon),var(--neon2));
+  color:#04060b;border-color:transparent}
+.btn.solid:hover{color:#04060b;box-shadow:0 0 34px rgba(77,226,255,.42)}
+
+/* stats */
+.stats{display:flex;gap:44px;justify-content:center;flex-wrap:wrap;
+  padding:44px 0 8px;border-top:1px solid var(--line);margin-top:64px}
+.stat{text-align:center}
+.stat b{display:block;font-size:30px;font-weight:800;letter-spacing:-.03em;color:var(--neon)}
+.stat span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+
+/* grid */
+.gridhead{display:flex;align-items:baseline;justify-content:space-between;
+  padding:72px 0 22px;flex-wrap:wrap;gap:12px}
+.gridhead h2{font-size:26px;letter-spacing:-.02em}
+.gridhead p{color:var(--dim);font-size:13px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));
+  gap:20px;padding-bottom:40px}
+.card{
+  position:relative;border:1px solid var(--line);border-radius:16px;
+  overflow:hidden;background:var(--panel);
+  transition:transform .25s cubic-bezier(.2,.8,.2,1),border-color .25s,box-shadow .25s;
+}
+.card:hover{transform:translateY(-6px);border-color:rgba(77,226,255,.55);
+  box-shadow:0 20px 50px -18px rgba(0,0,0,.9),0 0 34px -6px rgba(77,226,255,.3)}
+.frame{position:relative;height:192px;background:#04050a;overflow:hidden}
+.frame iframe{
+  position:absolute;top:0;left:0;width:200%;height:200%;
+  transform:scale(.5);transform-origin:0 0;border:0;pointer-events:none;
+}
+.frame .ph{position:absolute;inset:0;display:grid;place-items:center;
+  color:#2d3348;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+.meta{padding:16px 18px 18px;position:relative}
+.meta h3{font-size:16px;letter-spacing:-.01em;margin-bottom:5px}
+.meta p{font-size:13px;color:var(--dim);line-height:1.5;min-height:40px}
+.chips{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
+.chip{font-size:10px;letter-spacing:.09em;text-transform:uppercase;
+  padding:4px 9px;border-radius:6px;border:1px solid var(--line);color:var(--dim)}
+.chip.gl{color:var(--neon2);border-color:rgba(183,123,255,.35)}
+.chip.cv{color:var(--neon3);border-color:rgba(61,255,168,.3)}
+.open{position:absolute;top:12px;right:12px;z-index:2;
+  font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  padding:6px 11px;border-radius:7px;color:#04060b;font-weight:700;
+  background:var(--neon);opacity:0;transform:translateY(-6px);transition:.22s}
+.card:hover .open{opacity:1;transform:none}
+
+/* footer */
+footer{border-top:1px solid var(--line);margin-top:40px;padding:44px 0 70px;
+  display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;
+  color:var(--dim);font-size:13px}
+footer a:hover{color:var(--neon)}
+@media(max-width:640px){
+  header{padding:64px 0 36px}
+  .wrap{padding:0 18px}
+  .stats{gap:28px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="tag"><span class="dot"></span>15 demos, all live on this page</div>
+    <h1>Pallarium Labs</h1>
+    <p class="sub">Every tile below is a <b>real running demo</b>, not a screenshot. Each one is a single self contained file. No npm, no React, no build step. Click any tile, then view source.</p>
+    <div class="cta">
+      <a class="btn solid" href="#grid">Explore the demos</a>
+      <a class="btn" href="https://github.com/Pallarium/labs" target="_blank" rel="noopener">Source on GitHub</a>
+      <a class="btn" href="https://github.com/Pallarium" target="_blank" rel="noopener">Who built this</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>15</b><span>Demos</span></div>
+      <div class="stat"><b>0</b><span>Dependencies</span></div>
+      <div class="stat"><b>0</b><span>Build steps</span></div>
+      <div class="stat"><b>100%</b><span>View source</span></div>
+    </div>
+  </header>
+
+  <div class="gridhead" id="grid">
+    <h2>The collection</h2>
+    <p>Tiles load as you scroll so your fan stays quiet</p>
+  </div>
+
+  <div class="grid" id="cards"></div>
+
+  <footer>
+    <span>Built by Pallarium. Vanilla HTML, CSS and JS the whole way down.</span>
+    <span><a href="https://github.com/Pallarium/labs">github.com/Pallarium/labs</a></span>
+  </footer>
+
+</div>
+
+<script>
+const DEMOS = [
+  {id:"stylized-water", name:"Stylized Water", desc:"Animated gerstner style water surface with moving specular highlights and foam banding.", tags:["WebGL","Shader"]},
+  {id:"trippy-shader", name:"Trippy Shader", desc:"Fullscreen fragment shader that folds and warps space in a continuous psychedelic loop.", tags:["WebGL","Shader"]},
+  {id:"particle-storm", name:"Particle Storm", desc:"Thousands of particles driven by a curl noise field, rendered on a single canvas.", tags:["Canvas","Particles"]},
+  {id:"ink-field", name:"Ink Field", desc:"Ink diffusing through water, simulated with a velocity field and additive blending.", tags:["Canvas","Simulation"]},
+  {id:"waveworks", name:"Waveworks", desc:"Layered wave interference patterns you can watch reorganize themselves in real time.", tags:["Canvas","Math"]},
+  {id:"kaleido-tunnel", name:"Kaleido Tunnel", desc:"Endless mirrored tunnel built from a radially repeated texture sampler.", tags:["WebGL","Shader"]},
+  {id:"ambient-viz", name:"Ambient Viz", desc:"Reactive ambient visualizer that breathes through slow color and motion cycles.", tags:["Canvas","Ambient"]},
+  {id:"coral-reef", name:"Coral Reef", desc:"Generative reef that grows coral structures from simple recursive rules.", tags:["Canvas","Generative"]},
+  {id:"starfield", name:"Starfield", desc:"Classic warp speed starfield with depth based sizing and motion trails.", tags:["Canvas","Classic"]},
+  {id:"tunnel", name:"Tunnel", desc:"Demoscene style textured tunnel effect computed per pixel every frame.", tags:["Canvas","Demoscene"]},
+  {id:"solar-system", name:"Solar System", desc:"Orbiting planetary system with correct relative periods and drawn orbit paths.", tags:["Canvas","Physics"]},
+  {id:"fireworks", name:"Fireworks", desc:"Launching shells that burst into gravity affected sparks with fading trails.", tags:["Canvas","Particles"]},
+  {id:"cloud-system", name:"Cloud System", desc:"Volumetric looking clouds raised from layered noise, drifting across the sky.", tags:["Canvas","Noise"]},
+  {id:"winter-forest", name:"Winter Forest", desc:"Snowfall over a layered parallax forest with depth blur on the near trees.", tags:["Canvas","Scene"]},
+  {id:"butterfly-visualizer", name:"Butterfly Visualizer", desc:"Butterfly curve plotted and animated into a slowly evolving symmetric bloom.", tags:["Canvas","Math"]}
+];
+
+const cards = document.getElementById("cards");
+
+DEMOS.forEach(d => {
+  const url = `demos/${d.id}/index.html`;
+  const a = document.createElement("a");
+  a.className = "card";
+  a.href = url;
+  a.target = "_blank";
+  a.rel = "noopener";
+  a.innerHTML = `
+    <span class="open">Open</span>
+    <div class="frame" data-src="${url}"><div class="ph">loading</div></div>
+    <div class="meta">
+      <h3>${d.name}</h3>
+      <p>${d.desc}</p>
+      <div class="chips">
+        ${d.tags.map(t => {
+          const cls = t === "WebGL" ? "gl" : (t === "Canvas" ? "cv" : "");
+          return `<span class="chip ${cls}">${t}</span>`;
+        }).join("")}
+      </div>
+    </div>`;
+  cards.appendChild(a);
+});
+
+// lazy mount the iframes so 15 render loops don't start at once
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    if (!e.isIntersecting) return;
+    const frame = e.target;
+    io.unobserve(frame);
+    const f = document.createElement("iframe");
+    f.loading = "lazy";
+    f.setAttribute("scrolling", "no");
+    f.src = frame.dataset.src;
+    f.addEventListener("load", () => {
+      const ph = frame.querySelector(".ph");
+      if (ph) ph.remove();
+    });
+    frame.appendChild(f);
+  });
+}, { rootMargin: "300px" });
+
+document.querySelectorAll(".frame").forEach(f => io.observe(f));
+</script>
+</body>
+</html>
