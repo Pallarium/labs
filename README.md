@@ -60,6 +60,12 @@ No server needed.
 
 **[Pallarium](https://github.com/Pallarium)** — a personal AI that lives on one machine and builds things.
 
+### The module system
+
+The biggest thing about Pallarium is that it can grow. A module adds a new ability to Pallarium itself: a new panel, a new tool, a new behavior. Build one on one machine, publish it to GitHub, install it on another Pallarium and both have it instantly. That opens up a massive range of what it can do, and it is how these labs keep growing.
+
+Follow the project: [github.com/Pallarium/Pallarium](https://github.com/Pallarium/Pallarium) · [Product Hunt](https://www.producthunt.com/products/pallarium)
+
 <div align="center">
 <sub>Vanilla HTML, CSS and JS the whole way down.</sub>
 </div>
