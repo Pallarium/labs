@@ -68,6 +68,12 @@ h1{
 /* stats */
 .stats{display:flex;gap:44px;justify-content:center;flex-wrap:wrap;
   padding:44px 0 8px;border-top:1px solid var(--line);margin-top:64px}
+.modnote{display:block;max-width:640px;margin:44px auto 0;padding:18px 22px;text-align:left;
+  border:1px solid var(--line);border-radius:16px;background:rgba(183,123,255,.06);
+  color:inherit;text-decoration:none;transition:border-color .2s}
+.modnote:hover{border-color:var(--neon2)}
+.modnote b{display:block;margin-bottom:4px;color:var(--neon2);font-size:15px}
+.modnote span{color:var(--dim);font-size:14px;line-height:1.55}
 .stat{text-align:center}
 .stat b{display:block;font-size:30px;font-weight:800;letter-spacing:-.03em;color:var(--neon)}
 .stat span{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
@@ -138,6 +144,10 @@ footer a:hover{color:var(--neon)}
       <div class="stat"><b>0</b><span>Build steps</span></div>
       <div class="stat"><b>100%</b><span>View source</span></div>
     </div>
+    <a class="modnote" href="https://github.com/Pallarium/Pallarium#-modules--pallarium-grows" target="_blank" rel="noopener">
+      <b>🧩 The module system</b>
+      <span>Pallarium can add new abilities to itself, and share them. Build one, publish it to GitHub, install it on another Pallarium and both have it instantly. A massive range of what it can do.</span>
+    </a>
   </header>
 
   <div class="gridhead" id="grid">
