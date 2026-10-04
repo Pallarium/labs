@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NACRE</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;background:#000;overflow:hidden;font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+  canvas{display:block;width:100vw;height:100vh}
+  #ui{position:fixed;left:18px;bottom:18px;z-index:10;display:flex;flex-direction:column;gap:9px;
+      padding:14px 16px;border-radius:14px;background:rgba(6,8,12,.62);backdrop-filter:blur(14px);
+      border:1px solid rgba(140,200,255,.14);box-shadow:0 10px 40px rgba(0,0,0,.6);
+      transition:opacity .35s ease,transform .35s ease}
+  #ui.hide{opacity:0;transform:translateY(8px);pointer-events:none}
+  .row{display:flex;align-items:center;gap:10px}
+  .lab{font-size:9.5px;letter-spacing:.19em;text-transform:uppercase;color:#6d8296;width:74px}
+  input[type=range]{-webkit-appearance:none;width:132px;height:2px;border-radius:2px;
+      background:linear-gradient(90deg,#1ee6c8,#6f7cff,#ff5fd2);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;
+      background:#eaf6ff;box-shadow:0 0 10px rgba(120,220,255,.9);cursor:pointer}
+  .val{font-size:9.5px;color:#9db4c8;width:30px;text-align:right;font-variant-numeric:tabular-nums}
+  #modes{display:flex;gap:6px;margin-top:3px}
+  .mb{flex:1;padding:6px 0;font:inherit;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+      color:#7f93a8;background:rgba(255,255,255,.035);border:1px solid rgba(140,200,255,.13);
+      border-radius:8px;cursor:pointer;transition:.2s}
+  .mb:hover{color:#dff2ff;border-color:rgba(140,200,255,.36)}
+  .mb.on{color:#03131a;background:linear-gradient(135deg,#31f0d0,#7d8bff);border-color:transparent;font-weight:700}
+  #title{position:fixed;left:20px;top:18px;z-index:10;font-size:10px;letter-spacing:.44em;
+      color:rgba(190,220,245,.44);pointer-events:none}
+  #hint{position:fixed;right:20px;top:18px;z-index:10;font-size:9px;letter-spacing:.17em;
+      color:rgba(150,180,205,.32);pointer-events:none;text-align:right;line-height:1.7}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="title">N A C R E</div>
+<div id="hint">DRAG TO BEND LIGHT<br>H &middot; HIDE UI &nbsp; SPACE &middot; SHUFFLE</div>
+<div id="ui">
+  <div class="row"><span class="lab">Scale</span><input id="sScale" type="range" min="1.2" max="9" step=".05" value="3.0"><span class="val" id="vScale">3.0</span></div>
+  <div class="row"><span class="lab">Vein</span><input id="sVein" type="range" min="0.004" max="0.09" step=".001" value="0.034"><span class="val" id="vVein">.034</span></div>
+  <div class="row"><span class="lab">Film</span><input id="sFilm" type="range" min="0.4" max="7" step=".05" value="2.65"><span class="val" id="vFilm">2.65</span></div>
+  <div class="row"><span class="lab">Warp</span><input id="sWarp" type="range" min="0" max="1.4" step=".01" value="0.52"><span class="val" id="vWarp">.52</span></div>
+  <div class="row"><span class="lab">Grain</span><input id="sGrain" type="range" min="0" max="0.22" step=".005" value="0.075"><span class="val" id="vGrain">.075</span></div>
+  <div class="row"><span class="lab">Speed</span><input id="sSpeed" type="range" min="0" max="1.6" step=".01" value="0.38"><span class="val" id="vSpeed">.38</span></div>
+  <div id="modes">
+    <button class="mb on" data-m="0">Shell</button>
+    <button class="mb" data-m="1">Aurora</button>
+    <button class="mb" data-m="2">Fusion</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const gl = canvas.getContext('webgl2', {antialias:false, alpha:false, powerPreference:'high-performance'});
+if(!gl){ document.body.innerHTML = '<p style="color:#8ad;font:14px monospace;padding:40px">WebGL2 unavailable.</p>'; }
+
+const VERT = `#version 300 es
+precision highp float;
+const vec2 P[3] = vec2[3](vec2(-1.,-1.), vec2(3.,-1.), vec2(-1.,3.));
+void main(){ gl_Position = vec4(P[gl_VertexID], 0., 1.); }`;
+
+const FRAG = `#version 300 es
+precision highp float;
+out vec4 outColor;
+
+uniform vec2  uRes;
+uniform float uTime;
+uniform vec2  uMouse;
+uniform float uScale, uVein, uFilm, uWarp, uGrain, uSeed;
+uniform int   uMode;
+
+// ---- hash / noise ------------------------------------------------------
+vec2 hash2(vec2 p){
+  p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+  return fract(sin(p + uSeed) * 43758.5453);
+}
+float hash1(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1)) + uSeed) * 24634.6345); }
+
+float vnoise(vec2 p){
+  vec2 i = floor(p), f = fract(p);
+  vec2 u = f*f*(3.-2.*f);
+  float a = hash1(i), b = hash1(i+vec2(1,0)), c = hash1(i+vec2(0,1)), d = hash1(i+vec2(1,1));
+  return mix(mix(a,b,u.x), mix(c,d,u.x), u.y);
+}
+float fbm(vec2 p){
+  float s = 0., a = .5;
+  mat2 R = mat2(.8,-.6,.6,.8);
+  for(int i=0;i<6;i++){ s += a*vnoise(p); p = R*p*2.03; a *= .5; }
+  return s;
+}
+
+// ---- voronoi: returns cell id, edge distance, cell center offset --------
+// x = F2-F1 edge metric, yz = cell id point, w = F1
+vec4 voronoi(vec2 p){
+  vec2 n = floor(p), f = p - n;
+  vec2 mg, mr;
+  float md = 8.;
+  for(int j=-1;j<=1;j++)
+  for(int i=-1;i<=1;i++){
+    vec2 g = vec2(float(i), float(j));
+    vec2 o = hash2(n + g);
+    o = .5 + .45*sin(uTime*.35 + 6.2831*o);
+    vec2 r = g + o - f;
+    float d = dot(r, r);
+    if(d < md){ md = d; mr = r; mg = g; }
+  }
+  // second pass for true edge distance
+  float edge = 8.;
+  for(int j=-2;j<=2;j++)
+  for(int i=-2;i<=2;i++){
+    vec2 g = mg + vec2(float(i), float(j));
+    vec2 o = hash2(n + g);
+    o = .5 + .45*sin(uTime*.35 + 6.2831*o);
+    vec2 r = g + o - f;
+    if(dot(mr-r, mr-r) > .00001)
+      edge = min(edge, dot(.5*(mr+r), normalize(r-mr)));
+  }
+  vec2 id = n + mg;
+  return vec4(edge, id, sqrt(md));
+}
+
+// ---- thin-film interference -------------------------------------------
+// physically-flavoured: phase per RGB wavelength, cosine banding
+vec3 thinFilm(float thickness, float cosT){
+  vec3 lambda = vec3(.62, .54, .46);           // R,G,B wavelengths (um-ish)
+  vec3 phase  = 6.2831 * thickness * cosT / lambda;
+  vec3 col    = .5 + .5*cos(phase);
+  col = pow(col, vec3(1.35));                   // tighten the bands
+  return col;
+}
+
+vec3 aces(vec3 x){
+  return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14), 0., 1.);
+}
+
+void main(){
+  vec2 uv = (gl_FragCoord.xy - .5*uRes) / min(uRes.x, uRes.y);
+  vec2 m  = (uMouse - .5) * 2.;
+
+  // domain warp shared by all modes
+  vec2 w = uv;
+  float t = uTime;
+  vec2 q = vec2(fbm(w*1.6 + vec2(0., t*.11)), fbm(w*1.6 + vec2(4.2, -t*.09)));
+  vec2 r2 = vec2(fbm(w*1.6 + 3.0*q + vec2(1.7, 9.2) + m*.35),
+                 fbm(w*1.6 + 3.0*q + vec2(8.3, 2.8) - m*.35));
+  vec2 warped = w + uWarp * (r2 - .5) * .9;
+
+  vec3 col = vec3(0.);
+
+  // ===================== AURORA (soft grainy gradient) ==================
+  vec3 aur;
+  {
+    float f = fbm(warped*2.2 + vec2(0., t*.07));
+    float band = .5 + .5*sin(6.0*(warped.y + .55*warped.x) + 4.0*f + t*.25 + length(m)*1.2);
+    band = pow(band, 2.2);
+    float thickness = uFilm * (.35 + .8*f + .5*band);
+    vec3 film = thinFilm(thickness, .72 + .28*f);
+    float lumMask = smoothstep(.12, .95, band*(.45 + .75*f));
+    aur = film * lumMask;
+    // vignette the glow into deep black like the reference
+    float vig = 1. - .75*dot(uv*1.05, uv*1.05);
+    aur *= clamp(vig, 0., 1.);
+    aur *= 1.25;
+  }
+
+  // ===================== SHELL (cracked nacre) ==========================
+  vec3 shell;
+  {
+    vec4 v = voronoi(warped * uScale);
+    float edge = v.x;
+    vec2  id   = v.yz;
+
+    // per-cell surface: each shard has its own tilt + film thickness
+    float cellRand = hash1(id*1.37);
+    vec2  cellDir  = normalize(hash2(id*2.11) - .5 + 1e-4);
+
+    // micro-cracks inside each shard (thin secondary veins)
+    vec4 v2 = voronoi(warped * uScale * 3.4 + id*7.0);
+    float micro = smoothstep(.0, .055, v2.x);
+
+    // shard-local coordinate drives the thickness ramp -> lit sheen streaks
+    float ramp = dot(normalize(warped*uScale - id), cellDir);
+    float surf = fbm(warped*uScale*0.85 + id*3.0);
+    float cosT = clamp(.62 + .30*ramp + .10*(surf-.5) + .22*m.x, .05, 1.);
+    float thickness = uFilm * (.42 + .55*cellRand + .40*surf + .30*ramp);
+
+    vec3 film = thinFilm(thickness, cosT);
+    // bias toward the teal/green body of real nacre, keep pink as the accent
+    float acc = smoothstep(.45, .95, film.r * film.b);
+    film = mix(film * vec3(.42, 1.0, .92), film, acc*.85);
+
+    // specular hot streak along each shard
+    float spec = pow(clamp(ramp*.5+.5, 0., 1.), 9.) * (.5 + .5*cellRand);
+
+    // the black vein network — thick, hard, glossy-edged like the reference
+    float vein  = smoothstep(uVein*.35, uVein*1.85, edge);
+    float gloss = smoothstep(uVein*1.7, uVein*3.6, edge) - vein; // bright lip on crack edge
+
+    shell = film * (.55 + .85*surf);
+    shell += spec * vec3(.85,.95,1.) * .5;
+    shell *= micro*.75 + .25;          // micro cracks darken slightly
+    shell *= vein;                      // punch the black veins through
+    shell += gloss * vec3(.55,.8,.95) * .5;
+    shell *= 1.18;
+  }
+
+  if(uMode == 0)      col = shell;
+  else if(uMode == 1) col = aur;
+  else {
+    // fusion: aurora light seen *through* the shattered shell
+    vec4 v = voronoi(warped * uScale);
+    float vein = smoothstep(uVein*.35, uVein*1.85, v.x);
+    col = mix(aur*.65, shell, .55) * (vein*.82 + .18);
+    col += aur * (1.-vein) * .25;
+  }
+
+  // filmic + grain
+  col = aces(col * 1.12);
+  float g = (hash1(gl_FragCoord.xy + fract(uTime)*97.3) - .5);
+  col += g * uGrain * (0.35 + 0.9*(1.-length(col)));
+  col = max(col, 0.);
+
+  outColor = vec4(col, 1.);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src); gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+gl.bindVertexArray(gl.createVertexArray());
+
+const U = n => gl.getUniformLocation(prog, n);
+const uRes=U('uRes'), uTime=U('uTime'), uMouse=U('uMouse'), uScale=U('uScale'),
+      uVein=U('uVein'), uFilm=U('uFilm'), uWarp=U('uWarp'), uGrain=U('uGrain'),
+      uSeed=U('uSeed'), uMode=U('uMode');
+
+const S = {
+  scale:3.0, vein:.058, film:1.15, warp:.34, grain:.075, speed:.38,
+  seed: Math.random()*100, mode:0
+};
+
+function bind(id, valId, key, fmt){
+  const el = document.getElementById(id), out = document.getElementById(valId);
+  el.addEventListener('input', () => { S[key] = parseFloat(el.value); out.textContent = fmt(S[key]); });
+}
+const f2 = v => v.toFixed(2).replace(/^0\./,'.');
+const f3 = v => v.toFixed(3).replace(/^0\./,'.');
+bind('sScale','vScale','scale', v=>v.toFixed(1));
+bind('sVein','vVein','vein', f3);
+bind('sFilm','vFilm','film', v=>v.toFixed(2));
+bind('sWarp','vWarp','warp', f2);
+bind('sGrain','vGrain','grain', f3);
+bind('sSpeed','vSpeed','speed', f2);
+
+document.querySelectorAll('.mb').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.mb').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  S.mode = parseInt(b.dataset.m, 10);
+}));
+
+let mx = .5, my = .5, tx = .5, ty = .5, dragging = false;
+addEventListener('pointerdown', e => { dragging = true; tx = e.clientX/innerWidth; ty = 1-e.clientY/innerHeight; });
+addEventListener('pointerup',   () => dragging = false);
+addEventListener('pointermove', e => {
+  if(!dragging) return;
+  tx = e.clientX/innerWidth; ty = 1-e.clientY/innerHeight;
+});
+addEventListener('keydown', e => {
+  if(e.key === 'h' || e.key === 'H') document.getElementById('ui').classList.toggle('hide');
+  if(e.code === 'Space'){ e.preventDefault(); S.seed = Math.random()*100; }
+});
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio, 2);
+  canvas.width  = Math.floor(innerWidth  * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener('resize', resize);
+resize();
+
+let prev = performance.now(), clock = 0;
+function frame(now){
+  const dt = Math.min((now - prev)/1000, 1/20); prev = now;
+  clock += dt * S.speed;
+
+  // ease toward rest when not dragging
+  if(!dragging){ tx += (.5 - tx) * dt * 1.1; ty += (.5 - ty) * dt * 1.1; }
+  mx += (tx - mx) * Math.min(dt*6, 1);
+  my += (ty - my) * Math.min(dt*6, 1);
+
+  gl.uniform2f(uRes, canvas.width, canvas.height);
+  gl.uniform1f(uTime, clock);
+  gl.uniform2f(uMouse, mx, my);
+  gl.uniform1f(uScale, S.scale);
+  gl.uniform1f(uVein, S.vein);
+  gl.uniform1f(uFilm, S.film);
+  gl.uniform1f(uWarp, S.warp);
+  gl.uniform1f(uGrain, S.grain);
+  gl.uniform1f(uSeed, S.seed);
+  gl.uniform1i(uMode, S.mode);
+
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

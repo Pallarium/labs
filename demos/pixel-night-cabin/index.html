@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Night Cabin</title>
+<style>
+  html,body{margin:0;height:100%;background:#05060d;overflow:hidden;}
+  #wrap{width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+  canvas{image-rendering:pixelated;image-rendering:crisp-edges;width:min(100vw,177.7vh);height:min(56.25vw,100vh);box-shadow:0 0 60px #000;}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="320" height="180"></canvas></div>
+<script>
+const cv=document.getElementById('c'),x=cv.getContext('2d');
+const W=320,H=180;
+let t=0;
+
+// deterministic stars
+const stars=[];
+for(let i=0;i<90;i++){
+  stars.push({x:(Math.sin(i*12.9)*0.5+0.5)*W, y:(Math.cos(i*7.7)*0.5+0.5)*(H*0.55), p:Math.random()*Math.PI*2, s:Math.random()<0.15?2:1});
+}
+// snowflakes
+const snow=[];
+for(let i=0;i<70;i++){snow.push({x:Math.random()*W,y:Math.random()*H,sp:0.1+Math.random()*0.3,dr:Math.random()*Math.PI*2});}
+
+function px(px_,py,w,h,c){x.fillStyle=c;x.fillRect(px_,py,w,h);}
+
+function draw(){
+  t+=0.016;
+  // sky gradient bands
+  const bands=['#0a0a1e','#0d0d26','#11122e','#161638','#1c1c44'];
+  for(let i=0;i<bands.length;i++)px(0,i*8,W,8,bands[i]);
+  px(0,40,W,H-40,'#141428');
+
+  // moon
+  const mx=250,my=38,r=16;
+  x.fillStyle='#f4f1d0';x.beginPath();x.arc(mx,my,r,0,7);x.fill();
+  x.fillStyle='#161638';x.beginPath();x.arc(mx+7,my-4,14,0,7);x.fill();
+  // moon glow
+  const g=x.createRadialGradient(mx,my,4,mx,my,42);
+  g.addColorStop(0,'rgba(244,241,208,0.25)');g.addColorStop(1,'rgba(244,241,208,0)');
+  x.fillStyle=g;x.fillRect(mx-42,my-42,84,84);
+
+  // stars twinkle
+  for(const s of stars){
+    const a=0.4+0.6*Math.abs(Math.sin(t*1.5+s.p));
+    x.fillStyle='rgba(255,255,255,'+a.toFixed(2)+')';
+    x.fillRect(s.x|0,s.y|0,s.s,s.s);
+  }
+
+  // distant mountains
+  x.fillStyle='#0f0f22';
+  x.beginPath();x.moveTo(0,110);
+  for(let i=0;i<=W;i+=20)x.lineTo(i,90+Math.sin(i*0.09)*14);
+  x.lineTo(W,H);x.lineTo(0,H);x.fill();
+  // pine tree row silhouette
+  x.fillStyle='#0a1a14';
+  for(let i=-10;i<W+10;i+=14){tree(i,104,7,'#0a1a14');}
+
+  // snow ground
+  px(0,118,W,H-118,'#cdd6ea');
+  px(0,118,W,3,'#e7edf7');
+
+  // cabin
+  const cx=110,cy=92;
+  // body
+  px(cx,cy,80,40,'#4a2f1e');
+  // log lines
+  for(let i=0;i<5;i++)px(cx,cy+i*8,80,1,'#3a2416');
+  // roof (snow)
+  x.fillStyle='#5a3826';x.beginPath();x.moveTo(cx-8,cy);x.lineTo(cx+40,cy-26);x.lineTo(cx+88,cy);x.fill();
+  x.fillStyle='#eef2fb';x.beginPath();x.moveTo(cx-8,cy);x.lineTo(cx+40,cy-26);x.lineTo(cx+88,cy);x.lineTo(cx+80,cy);x.lineTo(cx+40,cy-20);x.lineTo(cx,cy);x.fill();
+  // door
+  px(cx+10,cy+18,14,22,'#2a1810');
+  px(cx+20,cy+28,2,2,'#c9a24a');
+  // windows - glowing
+  const glow=0.7+0.3*Math.sin(t*3);
+  x.fillStyle='rgba(255,190,90,'+glow.toFixed(2)+')';
+  px(cx+40,cy+10,16,14,x.fillStyle);
+  px(cx+62,cy+10,12,14,x.fillStyle);
+  // window frames
+  x.strokeStyle='#2a1810';x.lineWidth=1;
+  x.strokeRect(cx+40.5,cy+10.5,16,14);x.strokeRect(cx+62.5,cy+10.5,12,14);
+  px(cx+48,cy+10,1,14,'#2a1810');px(cx+40,cy+16,16,1,'#2a1810');
+  px(cx+68,cy+10,1,14,'#2a1810');px(cx+62,cy+16,12,1,'#2a1810');
+  // window glow halo
+  const wg=x.createRadialGradient(cx+55,cy+16,2,cx+55,cy+16,30);
+  wg.addColorStop(0,'rgba(255,180,80,'+(0.18*glow).toFixed(2)+')');wg.addColorStop(1,'rgba(255,180,80,0)');
+  x.fillStyle=wg;x.fillRect(cx+25,cy-14,60,60);
+
+  // chimney + smoke
+  px(cx+60,cy-24,8,12,'#3a2416');
+  for(let i=0;i<6;i++){
+    const yy=cy-26-i*7-((t*8)%7);
+    const xx=cx+64+Math.sin(t*1.2+i*0.8)*(3+i);
+    const a=(0.25-i*0.035);
+    if(a>0){x.fillStyle='rgba(200,200,210,'+a.toFixed(2)+')';x.beginPath();x.arc(xx,yy,2+i*0.6,0,7);x.fill();}
+  }
+
+  // foreground pines
+  tree(30,128,14,'#08130d');
+  tree(285,132,16,'#08130d');
+
+  // snow fall
+  for(const s of snow){
+    s.y+=s.sp;s.x+=Math.sin(t+s.dr)*0.15;
+    if(s.y>H){s.y=-2;s.x=Math.random()*W;}
+    x.fillStyle='rgba(240,245,255,0.85)';
+    x.fillRect(s.x|0,s.y|0,1,1);
+  }
+
+  // vignette
+  const v=x.createRadialGradient(W/2,H/2,60,W/2,H/2,200);
+  v.addColorStop(0,'rgba(0,0,0,0)');v.addColorStop(1,'rgba(0,0,0,0.55)');
+  x.fillStyle=v;x.fillRect(0,0,W,H);
+
+  requestAnimationFrame(draw);
+}
+function tree(bx,by,s,c){
+  x.fillStyle='#2a1a10';x.fillRect(bx-1,by,2,s*0.4);
+  x.fillStyle=c;
+  for(let l=0;l<3;l++){
+    const w=s-l*(s/4);
+    x.beginPath();x.moveTo(bx-w,by-l*s*0.35);x.lineTo(bx,by-l*s*0.35-s*0.6);x.lineTo(bx+w,by-l*s*0.35);x.fill();
+  }
+  // snow caps
+  x.fillStyle='rgba(230,238,250,0.8)';
+  x.beginPath();x.moveTo(bx-2,by-s*0.55);x.lineTo(bx,by-s*0.6-s*0.35);x.lineTo(bx+2,by-s*0.55);x.fill();
+}
+draw();
+</script>
+</body>
+</html>

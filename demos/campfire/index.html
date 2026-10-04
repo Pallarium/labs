@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Living Campfire</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050302;color:#e8c9a0;font:13px system-ui,sans-serif;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden}
+canvas{max-width:100vw;max-height:100vh;display:block}
+#ui{position:fixed;top:10px;left:10px;background:rgba(0,0,0,.6);padding:8px 12px;border-radius:8px;display:flex;gap:14px}
+#ui label{cursor:pointer;user-select:none}
+#credit{position:fixed;bottom:6px;right:10px;font-size:11px;opacity:.55}
+</style></head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+<label><input type="checkbox" id="flames"> Flames</label>
+<label><input type="checkbox" id="sparks"> Sparks</label>
+<label><input type="checkbox" id="glow"> Ground glow</label>
+</div>
+<div id="credit">Photo: "Social Fire" by Homeandgardners, CC BY-SA 2.0</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const on=id=>document.getElementById(id).checked;
+const img=new Image();img.src='fire.jpg';
+let W,H,base,box,mask,out,glowX,glowY;
+img.onload=()=>{
+  W=cv.width=img.naturalWidth;H=cv.height=img.naturalHeight;
+  ctx.drawImage(img,0,0);
+  base=ctx.getImageData(0,0,W,H);
+  // fire region (around the blaze, including the lower spray)
+  box={x:Math.round(W*.30),y:Math.round(H*.40),w:Math.round(W*.40),h:Math.round(H*.55)};
+  glowX=W*.50;glowY=H*.80;
+  mask=new Float32Array(box.w*box.h);
+  const d=base.data;
+  for(let j=0;j<box.h;j++)for(let i=0;i<box.w;i++){
+    const x=box.x+i,y=box.y+j,k=(y*W+x)*4,r=d[k],g=d[k+1],b=d[k+2];
+    const lum=(r*.3+g*.59+b*.11)/255, warm=(r-b)/255;
+    let m=Math.min(1,Math.max(0,(lum-.35)/.4))*Math.min(1,Math.max(0,warm*2.2+ .3));
+    const ex=(x-W*.5)/(W*.2),ey=(y-H*.72)/(H*.28),e=ex*ex+ey*ey;
+    m*=Math.max(0,1-e*e);
+    mask[j*box.w+i]=m;
+  }
+  out=ctx.createImageData(box.w,box.h);
+  requestAnimationFrame(loop);
+};
+const sparks=[];
+function spawnSpark(){
+  sparks.push({x:W*.5+(Math.random()-.5)*W*.08,y:H*.74,vx:(Math.random()-.5)*40,vy:-(120+Math.random()*220),
+    life:0,max:1.2+Math.random()*1.8,s:.8+Math.random()*1.6,ph:Math.random()*6});
+}
+let prev=0,t=0,acc=0,paused=false;
+document.addEventListener('visibilitychange',()=>{paused=document.hidden;prev=0});
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(paused)return;
+  const dt=prev?Math.min((ts-prev)/1000,.05):0;prev=ts;t+=dt;
+  ctx.putImageData(base,0,0);
+  if(on('flames'))flames();
+  if(on('glow'))glow();
+  if(on('sparks'))drawSparks(dt);
+}
+function flames(){
+  const d=base.data,o=out.data,bw=box.w,bh=box.h;
+  const flick=1+.12*Math.sin(t*13)+.08*Math.sin(t*23.7+1);
+  for(let j=0;j<bh;j++){
+    const y=box.y+j;
+    for(let i=0;i<bw;i++){
+      const m=mask[j*bw+i],q=(j*bw+i)*4,x=box.x+i;
+      if(m<.01){const k=(y*W+x)*4;o[q]=d[k];o[q+1]=d[k+1];o[q+2]=d[k+2];o[q+3]=255;continue;}
+      const n=Math.sin(y*.11+t*15+Math.sin(x*.07+t*4)*2.2);
+      const dx=Math.sin(y*.045-t*7+x*.02)*2.5*m;
+      const dy=(2+n*3)*m;
+      let sx=(x+dx)|0,sy=(y+dy)|0;
+      if(sx<0)sx=0;if(sx>=W)sx=W-1;if(sy>=H)sy=H-1;if(sy<0)sy=0;
+      const k=(sy*W+sx)*4,k0=(y*W+x)*4;
+      const bright=1+m*((flick-1)+.12*n);
+      o[q]=Math.min(255,(d[k0]*(1-m)+d[k]*m)*bright);
+      o[q+1]=Math.min(255,(d[k0+1]*(1-m)+d[k+1]*m)*bright);
+      o[q+2]=Math.min(255,(d[k0+2]*(1-m)+d[k+2]*m)*bright);
+      o[q+3]=255;
+    }
+  }
+  ctx.putImageData(out,box.x,box.y);
+}
+function glow(){
+  const p=.5+.25*Math.sin(t*2.1)+.15*Math.sin(t*5.3+.7)+.1*Math.sin(t*11.9);
+  ctx.save();
+  ctx.globalCompositeOperation='lighter';
+  ctx.translate(glowX,glowY);ctx.scale(1,.38);
+  const R=W*.55,g=ctx.createRadialGradient(0,0,0,0,0,R);
+  g.addColorStop(0,`rgba(255,140,50,${.30*p})`);
+  g.addColorStop(.4,`rgba(255,100,30,${.14*p})`);
+  g.addColorStop(1,'rgba(255,80,20,0)');
+  ctx.fillStyle=g;ctx.fillRect(-R,-R,R*2,R*2);
+  ctx.restore();
+}
+function drawSparks(dt){
+  acc+=dt*70;while(acc>1){spawnSpark();acc--;}
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.lineCap='round';
+  for(let i=sparks.length-1;i>=0;i--){
+    const s=sparks[i];s.life+=dt;
+    if(s.life>s.max||s.y<-10){sparks.splice(i,1);continue;}
+    s.vx+=Math.sin(t*3+s.ph)*30*dt;s.vy*=1-.25*dt;
+    s.x+=s.vx*dt;s.y+=s.vy*dt;
+    const a=(1-s.life/s.max)*(.6+.4*Math.sin(t*30+s.ph*5));
+    ctx.strokeStyle=`rgba(255,${170+(s.ph*10|0)},80,${a})`;ctx.lineWidth=s.s;
+    ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x-s.vx*.03,s.y-s.vy*.03);ctx.stroke();
+  }
+  ctx.restore();
+}
+</script>
+</body></html>

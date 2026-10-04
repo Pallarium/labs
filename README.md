@@ -2,7 +2,7 @@
 
 # Pallarium Labs
 
-**14 live web demos. No npm. No React. No build step.**
+**21 live web demos. No npm. No React. No build step.**
 
 Shaders, particle systems, fluid fields and generative scenes.
 Every demo is a single self contained file you can open and read top to bottom.
@@ -29,7 +29,13 @@ Every demo is a single self contained file you can open and read top to bottom.
 | [Tunnel](demos/tunnel/) | Demoscene textured tunnel computed per pixel per frame | Canvas |
 | [Solar System](demos/solar-system/) | Orbiting system with correct relative periods | Canvas |
 | [Fireworks](demos/fireworks/) | Shells bursting into gravity affected sparks | Canvas |
-| [Cloud System](demos/cloud-system/) | Volumetric looking clouds raised from layered noise | Canvas |
+| [Hunger Games Trailer](demos/hunger-games/) | Trailer for my 3D survival arena game, cut from real in game footage | Video |
+| [Emberhollow](demos/emberhollow/) | Hand inked dungeon crawler, five floors and five bosses | WebGL |
+| [Neon Arena](demos/neon-arena/) | Twin stick arena shooter with dash and seeded waves | Canvas |
+| [Flapwing](demos/flapwing/) | A flappy bird take with its own art direction | Canvas |
+| [Nacre](demos/nacre/) | Iridescent cracked shell, thin film shader | WebGL |
+| [Campfire](demos/campfire/) | Real bonfire photo with animated flames, sparks and glow toggles | Canvas |
+| [Pixel Night Cabin](demos/pixel-night-cabin/) | Pixel art cabin under a night sky | Canvas |
 | [Winter Forest](demos/winter-forest/) | Snowfall over a layered parallax forest | Canvas |
 | [Butterfly Visualizer](demos/butterfly-visualizer/) | Butterfly curve animated into a symmetric bloom | Canvas |
 

@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Pallarium Labs — 15 live web demos</title>
-<meta name="description" content="Fifteen self-contained canvas and WebGL demos built by Pallarium. No build step, no dependencies, view source on any of them.">
+<title>Pallarium Labs — 21 live web demos</title>
+<meta name="description" content="Twenty one self-contained canvas, WebGL and game demos built by Pallarium. No build step, no dependencies, view source on any of them.">
 <meta property="og:title" content="Pallarium Labs">
-<meta property="og:description" content="Fifteen live canvas and WebGL demos. Single file each. View source on any of them.">
+<meta property="og:description" content="Twenty one live canvas, WebGL and game demos. Single file each. View source on any of them.">
 <meta property="og:type" content="website">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -123,7 +123,7 @@ footer a:hover{color:var(--neon)}
 <div class="wrap">
 
   <header>
-    <div class="tag"><span class="dot"></span>15 demos, all live on this page</div>
+    <div class="tag"><span class="dot"></span>21 demos, all live on this page</div>
     <h1>Pallarium Labs</h1>
     <p class="sub">Every tile below is a <b>real running demo</b>, not a screenshot. Each one is a single self contained file. No npm, no React, no build step. Click any tile, then view source.</p>
     <div class="cta">
@@ -132,7 +132,7 @@ footer a:hover{color:var(--neon)}
       <a class="btn" href="https://github.com/Pallarium" target="_blank" rel="noopener">Who built this</a>
     </div>
     <div class="stats">
-      <div class="stat"><b>15</b><span>Demos</span></div>
+      <div class="stat"><b>21</b><span>Demos</span></div>
       <div class="stat"><b>0</b><span>Dependencies</span></div>
       <div class="stat"><b>0</b><span>Build steps</span></div>
       <div class="stat"><b>100%</b><span>View source</span></div>
@@ -167,7 +167,13 @@ const DEMOS = [
   {id:"tunnel", name:"Tunnel", desc:"Demoscene style textured tunnel effect computed per pixel every frame.", tags:["Canvas","Demoscene"]},
   {id:"solar-system", name:"Solar System", desc:"Orbiting planetary system with correct relative periods and drawn orbit paths.", tags:["Canvas","Physics"]},
   {id:"fireworks", name:"Fireworks", desc:"Launching shells that burst into gravity affected sparks with fading trails.", tags:["Canvas","Particles"]},
-  {id:"cloud-system", name:"Cloud System", desc:"Volumetric looking clouds raised from layered noise, drifting across the sky.", tags:["Canvas","Noise"]},
+  {id:"hunger-games", name:"Hunger Games Trailer", desc:"Trailer for my 3D survival arena game, cut from real in game footage. Multiplayer is next.", tags:["Game","Video"]},
+  {id:"emberhollow", name:"Emberhollow", desc:"Hand inked dungeon crawler. One lantern, five floors, five bosses. Everything drawn at runtime.", tags:["WebGL","Game"]},
+  {id:"neon-arena", name:"Neon Arena", desc:"Twin stick arena shooter with dash, seeded waves and glowing vector enemies. Hit start, then WASD and click.", tags:["Canvas","Game"]},
+  {id:"flapwing", name:"Flapwing", desc:"A flappy bird take with its own art direction and local fonts.", tags:["Canvas","Game"]},
+  {id:"nacre", name:"Nacre", desc:"Iridescent cracked shell surface, a thin film shader shifting colour as it moves.", tags:["WebGL","Shader"]},
+  {id:"campfire", name:"Campfire", desc:"A real bonfire photo with toggles that add animated flames, sparks and ground glow on top.", tags:["Canvas","Photo"]},
+  {id:"pixel-night-cabin", name:"Pixel Night Cabin", desc:"A tiny pixel art cabin under a night sky with a flickering window.", tags:["Canvas","Scene"]},
   {id:"winter-forest", name:"Winter Forest", desc:"Snowfall over a layered parallax forest with depth blur on the near trees.", tags:["Canvas","Scene"]},
   {id:"butterfly-visualizer", name:"Butterfly Visualizer", desc:"Butterfly curve plotted and animated into a slowly evolving symmetric bloom.", tags:["Canvas","Math"]}
 ];
@@ -197,7 +203,7 @@ DEMOS.forEach(d => {
   cards.appendChild(a);
 });
 
-// lazy mount the iframes so 15 render loops don't start at once
+// lazy mount the iframes so 21 render loops don't start at once
 const io = new IntersectionObserver((entries) => {
   entries.forEach(e => {
     if (!e.isIntersecting) return;

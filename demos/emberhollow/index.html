@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>EMBERHOLLOW</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="game"></canvas>
+
+  <!-- ---------------- HUD ---------------- -->
+  <div id="hud" class="hidden">
+    <div class="hud-left">
+      <div class="bar hp"><div class="fill" id="hpFill"></div><span id="hpText">100 / 100</span></div>
+      <div class="bar sh"><div class="fill" id="shFill"></div></div>
+      <div id="dashPips" class="pips"></div>
+    </div>
+    <div class="hud-center">
+      <div id="floorTag">THE UNDERCROFT</div>
+      <div id="roomTag">CHAMBER I OF VIII</div>
+    </div>
+    <div class="hud-right">
+      <div id="weaponName">OLD SWORD</div>
+      <div id="coreCount"><i>&#9670;</i> <span>0</span></div>
+      <div id="comboTag" class="hidden">x1</div>
+    </div>
+  </div>
+
+  <div id="bossBar" class="hidden">
+    <div class="bossName"></div>
+    <div class="bossTrack"><div class="bossFill"></div><div class="bossChip"></div></div>
+  </div>
+
+  <div id="banner" class="hidden"><h1></h1><p></p></div>
+
+  <!-- ---------------- TITLE ---------------- -->
+  <div id="title" class="screen">
+    <div class="logo">
+      <h1>EMBER<span>HOLLOW</span></h1>
+      <p class="tag">a lantern &middot; a blade &middot; eight floors down</p>
+    </div>
+    <div class="menu">
+      <button id="btnPlay" class="big">DESCEND</button>
+      <button id="btnHow">CONTROLS</button>
+      <button id="btnWipe" class="ghost">BURN THE LEDGER</button>
+    </div>
+    <div class="metaStrip">
+      <div><b id="mBest">0</b><span>DEEPEST</span></div>
+      <div><b id="mKills">0</b><span>SLAIN</span></div>
+      <div><b id="mCores">0</b><span>EMBERS</span></div>
+      <div><b id="mRuns">0</b><span>DELVES</span></div>
+    </div>
+    <div id="howto" class="hidden panel">
+      <h3>CONTROLS</h3>
+      <ul>
+        <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> move</li>
+        <li><kbd>MOUSE</kbd> aim &middot; <kbd>HOLD LMB</kbd> strike</li>
+        <li><kbd>SPACE</kbd> roll (brief invulnerability)</li>
+        <li><kbd>RMB</kbd> / <kbd>Q</kbd> lantern flare</li>
+        <li><kbd>ESC</kbd> rest &middot; <kbd>M</kbd> silence</li>
+      </ul>
+      <p class="fine">Clear a chamber and the door unbars. Take a relic between chambers. Something old waits at the bottom of every floor.</p>
+    </div>
+  </div>
+
+  <!-- ---------------- RELIC DRAFT ---------------- -->
+  <div id="draft" class="screen hidden">
+    <h2>TAKE A RELIC</h2>
+    <div id="cards" class="cards"></div>
+    <div class="rerollRow">
+      <button id="btnReroll">DIG DEEPER <i>&#9670;</i><span id="rerollCost">5</span></button>
+      <button id="btnSkip" class="ghost">LEAVE IT &rarr; MEND 15</button>
+    </div>
+  </div>
+
+  <!-- ---------------- PAUSE ---------------- -->
+  <div id="pause" class="screen hidden">
+    <h2>RESTING</h2>
+    <div id="buildList" class="buildList"></div>
+    <div id="statSheet" class="statSheet"></div>
+    <div class="mixer">
+      <label>MASTER<input type="range" id="volMaster" min="0" max="100" value="100"></label>
+      <label>DRONE<input type="range" id="volMusic" min="0" max="100" value="100"></label>
+      <label>BLADE<input type="range" id="volSfx" min="0" max="100" value="100"></label>
+    </div>
+    <div class="menu">
+      <button id="btnResume" class="big">PRESS ON</button>
+      <button id="btnQuit" class="ghost">ABANDON THE DELVE</button>
+    </div>
+  </div>
+
+  <!-- ---------------- DEATH / WIN ---------------- -->
+  <div id="over" class="screen hidden">
+    <h2 id="overTitle">THE LANTERN GOES OUT</h2>
+    <div class="statGrid">
+      <div><b id="oFloor">1</b><span>FLOOR</span></div>
+      <div><b id="oKills">0</b><span>SLAIN</span></div>
+      <div><b id="oTime">0:00</b><span>TIME</span></div>
+      <div><b id="oCores">0</b><span>EMBERS</span></div>
+    </div>
+    <div id="overBuild" class="buildList"></div>
+    <div class="menu">
+      <button id="btnAgain" class="big">DELVE AGAIN</button>
+      <button id="btnMenu" class="ghost">THE SURFACE</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
